@@ -65,11 +65,3 @@ TicketHub/
 └── web/             # Vue 3 用户端
 ```
 
-## 文档
-
-- [API 接口说明](docs/api.md)
-- [DDD 编码规范](docs/ddd.md)
-- [部署运行说明](docs/deployment.md)
-
-本项目用于架构学习和工程实践，支付渠道为模拟实现，不应直接用于生产交易。
-
