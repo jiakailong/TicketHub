@@ -1,0 +1,72 @@
+routes:
+  - id: tickethub-bff-api
+    uri: /api/*
+    plugins:
+      request-id:
+        header_name: X-Request-ID
+        include_in_response: true
+      cors: {}
+      limit-req:
+        rate: 300
+        burst: 100
+        key: remote_addr
+        key_type: var
+        policy: redis
+        redis_host: tickethub-redis
+        redis_port: 6379
+        redis_database: 0
+        nodelay: true
+        rejected_code: 429
+      prometheus: {}
+    upstream:
+      type: roundrobin
+      nodes:
+        "host.docker.internal:8080": 1
+  - id: tickethub-create-order
+    uri: /api/orders
+    methods: [POST]
+    priority: 100
+    plugins:
+      request-id:
+        header_name: X-Request-ID
+        include_in_response: true
+      cors: {}
+      limit-req:
+        rate: 1000
+        burst: 500
+        key: remote_addr
+        key_type: var
+        policy: redis
+        redis_host: tickethub-redis
+        redis_port: 6379
+        redis_database: 0
+        nodelay: true
+        rejected_code: 429
+      prometheus: {}
+    upstream:
+      type: roundrobin
+      nodes:
+        "host.docker.internal:8080": 1
+  - id: tickethub-bff-health
+    uri: /healthz
+    plugins:
+      request-id:
+        header_name: X-Request-ID
+        include_in_response: true
+      limit-req:
+        rate: 60
+        burst: 20
+        key: remote_addr
+        key_type: var
+        policy: redis
+        redis_host: tickethub-redis
+        redis_port: 6379
+        redis_database: 0
+        nodelay: true
+        rejected_code: 429
+      prometheus: {}
+    upstream:
+      type: roundrobin
+      nodes:
+        "host.docker.internal:8080": 1
+#END

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package tickethub.user.v1;
+
+option go_package = "tickethub/api/proto/user/v1;userv1";
+
+service UserService {
+  rpc Register(RegisterRequest) returns (UserReply);
+  rpc Login(LoginRequest) returns (LoginReply);
+  rpc GetUser(GetUserRequest) returns (UserReply);
+  rpc ListTicketUsers(ListTicketUsersRequest) returns (ListTicketUsersReply);
+  rpc AddTicketUser(AddTicketUserRequest) returns (TicketUser);
+}
+
+message RegisterRequest {
+  string mobile = 1;
+  string password = 2;
+}
+
+message LoginRequest {
+  string mobile = 1;
+  string password = 2;
+}
+
+message GetUserRequest {
+  int64 user_id = 1;
+}
+
+message UserReply {
+  int64 user_id = 1;
+  string mobile = 2;
+  string real_name_status = 3;
+}
+
+message LoginReply {
+  string access_token = 1;
+  UserReply user = 2;
+}
+
+message ListTicketUsersRequest {
+  int64 user_id = 1;
+}
+
+message TicketUser {
+  int64 id = 1;
+  string name = 2;
+  string certificate_no = 3;
+}
+
+message ListTicketUsersReply {
+  repeated TicketUser ticket_users = 1;
+}
+
+message AddTicketUserRequest {
+  int64 user_id = 1;
+  string name = 2;
+  string certificate_no = 3;
+  string mobile = 4;
+}

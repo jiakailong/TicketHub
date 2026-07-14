@@ -1,0 +1,36 @@
+namespace: tickethub
+
+image:
+  registry: tickethub
+  tag: local
+  pullPolicy: IfNotPresent
+
+services:
+  gateway-bff:
+    port: 8080
+    replicas: 2
+  user-service:
+    port: 8001
+    replicas: 2
+  program-service:
+    port: 8002
+    replicas: 3
+  order-service:
+    port: 8003
+    replicas: 3
+  pay-service:
+    port: 8004
+    replicas: 2
+  base-data-service:
+    port: 8005
+    replicas: 1
+  customize-service:
+    port: 8006
+    replicas: 1
+  admin-service:
+    port: 8007
+    replicas: 1
+  migrate-service:
+    port: 8008
+    replicas: 1
+

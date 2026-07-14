@@ -1,0 +1,340 @@
+openapi: 3.0.3
+info:
+  title: TicketHub Gateway API
+  version: 0.1.0
+paths:
+  /api/users/register:
+    post:
+      summary: Register through gateway-bff.
+      responses:
+        "200":
+          description: Registered user returned with a masked mobile number.
+  /api/users/login:
+    post:
+      summary: Login through gateway-bff and return an access token.
+      responses:
+        "200":
+          description: Token and user returned; the mobile number is masked.
+  /api/users/ticket-users:
+    get:
+      summary: List ticket users.
+      responses:
+        "200":
+          description: Ticket users returned with masked names and certificate numbers.
+    post:
+      summary: Add a ticket user.
+      responses:
+        "200":
+          description: Ticket user returned with masked name and certificate number.
+  /api/programs/search:
+    get:
+      summary: Search programs.
+      parameters:
+        - in: query
+          name: keyword
+          schema:
+            type: string
+        - in: query
+          name: city
+          schema:
+            type: string
+        - in: query
+          name: cursor
+          description: Opaque search_after cursor returned by the previous response.
+          schema:
+            type: string
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Program summaries and next_cursor returned.
+  /api/programs/suggest:
+    get:
+      summary: Suggest program titles by prefix.
+      parameters:
+        - in: query
+          name: prefix
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+      responses:
+        "200":
+          description: Suggested titles returned.
+  /api/programs/detail:
+    get:
+      summary: Get program detail.
+      parameters:
+        - in: query
+          name: program_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: ticket_category_id
+          required: false
+          description: Include seats for this ticket category when supplied.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Program detail returned.
+  /api/orders:
+    get:
+      summary: List the authenticated user's orders or query one owned order.
+      parameters:
+        - in: query
+          name: order_number
+          required: false
+          description: Decimal string; omit to list recent orders.
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [NO_PAY, PAY, CANCEL, REFUND]
+        - in: query
+          name: cursor
+          required: false
+          description: Opaque created_at and order_number cursor from next_cursor.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Owned order detail, or an order page with next_cursor, returned.
+    post:
+      summary: Create an async ticket order.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          description: Stable unique key for one logical purchase attempt.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order number returned.
+  /api/payments/check:
+    get:
+      summary: Check payment trade status.
+      responses:
+        "200":
+          description: Payment trade returned.
+  /api/payments:
+    post:
+      summary: Start a payment for an order.
+      responses:
+        "200":
+          description: Payment URL returned.
+  /api/payments/callback:
+    post:
+      summary: Receive a callback from the development payment adapter.
+      responses:
+        "200":
+          description: Callback accepted and order state synchronized.
+  /api/admin/dashboard:
+    get:
+      summary: Query admin dashboard.
+      responses:
+        "200":
+          description: Dashboard stats returned.
+  /api/admin/reconciliation/run:
+    post:
+      summary: Reconcile order records and aggregate program inventory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [program_id]
+              properties:
+                program_id:
+                  type: integer
+                  format: int64
+                repair_inventory:
+                  type: boolean
+                  default: false
+            example:
+              program_id: 10001
+              repair_inventory: false
+      responses:
+        "200":
+          description: Record and inventory differences returned; repairs are reported when explicitly enabled.
+        "409":
+          description: Repair is blocked while active inventory reservations exist.
+  /api/admin/programs:
+    post:
+      summary: Create or update a draft program and its ticket categories.
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Draft program saved.
+  /api/admin/programs/status:
+    post:
+      summary: Advance a program through its lifecycle.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [program_id, status]
+              properties:
+                program_id:
+                  type: integer
+                  format: int64
+                status:
+                  type: string
+                  enum: [READY, ON_SALE, OFF_SALE]
+      responses:
+        "200":
+          description: Program status changed and change event recorded.
+  /api/admin/discard-orders:
+    get:
+      summary: List pending discarded order events.
+      responses:
+        "200":
+          description: Pending discard orders returned.
+  /api/admin/discard-orders/retry:
+    post:
+      summary: Retry one or a batch of discarded order events.
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Compensation result returned.
+  /api/migrate/tasks:
+    post:
+      summary: Create an online order-shard migration and enable dual write.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [virtual_shard, source_shard, target_shard]
+              properties:
+                virtual_shard:
+                  type: integer
+                source_shard:
+                  type: string
+                target_shard:
+                  type: string
+                batch_size:
+                  type: integer
+                  default: 500
+            example:
+              virtual_shard: 0
+              source_shard: tickethub_order_0.orders_0
+              target_shard: tickethub_order_2.orders_0
+              batch_size: 500
+      responses:
+        "200":
+          description: Migration task created and dual write activated.
+  /api/migrate/tasks/resume:
+    post:
+      summary: Resume a paused shard migration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_id]
+              properties:
+                task_id:
+                  type: integer
+                  format: int64
+      responses:
+        "200":
+          description: Migration task resumed.
+  /api/migrate/shard-mappings:
+    get:
+      summary: List runtime primary and shadow shard mappings.
+      responses:
+        "200":
+          description: Versioned shard mappings returned.
+  /v1/users/register:
+    post:
+      summary: Register a user.
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Registered user returned.
+  /v1/program/orders:
+    post:
+      summary: Create a ticket order through the flash-sale path.
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Order number returned.
+  /v1/orders/cancel:
+    post:
+      summary: Cancel an unpaid order.
+      responses:
+        "200":
+          description: Canceled order number returned.
+  /v1/payments:
+    post:
+      summary: Start payment for an order.
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Payment payload returned.
+  /v1/admin/reconciliation/run:
+    post:
+      summary: Trigger internal order and inventory reconciliation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [program_id]
+              properties:
+                program_id:
+                  type: integer
+                  format: int64
+                repair_inventory:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Reconciliation result returned.
+  /v1/orders/discard-orders:
+    get:
+      summary: List pending discarded order events.
+      responses:
+        "200":
+          description: Pending discard orders returned.
+  /v1/orders/discard-orders/retry:
+    post:
+      summary: Retry discarded order events.
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Compensation result returned.

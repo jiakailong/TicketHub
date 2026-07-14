@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "tickethub-apisix"
+    metrics_path: /apisix/prometheus/metrics
+    static_configs:
+      - targets:
+          - "tickethub-apisix:9091"
+
+  - job_name: "tickethub-services"
+    static_configs:
+      - targets:
+          - "host.docker.internal:8080"
+          - "host.docker.internal:8001"
+          - "host.docker.internal:8002"
+          - "host.docker.internal:8003"
+          - "host.docker.internal:8004"
+          - "host.docker.internal:8005"
+          - "host.docker.internal:8006"
+          - "host.docker.internal:8007"
+          - "host.docker.internal:8008"

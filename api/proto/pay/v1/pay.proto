@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package tickethub.pay.v1;
+
+option go_package = "tickethub/api/proto/pay/v1;payv1";
+
+service PayService {
+  rpc CommonPay(CommonPayRequest) returns (CommonPayReply);
+  rpc TradeCheck(TradeCheckRequest) returns (TradeCheckReply);
+  rpc Refund(RefundRequest) returns (RefundReply);
+}
+
+message CommonPayRequest {
+  int64 order_number = 1;
+  int64 amount_cent = 2;
+  string channel = 3;
+  int64 user_id = 4;
+}
+
+message CommonPayReply {
+  string pay_url = 1;
+}
+
+message TradeCheckRequest {
+  int64 order_number = 1;
+  string channel = 2;
+  int64 user_id = 3;
+}
+
+message TradeCheckReply {
+  bool paid = 1;
+}
+
+message RefundRequest {
+  int64 order_number = 1;
+  int64 amount_cent = 2;
+  string reason = 3;
+}
+
+message RefundReply {
+  bool success = 1;
+}

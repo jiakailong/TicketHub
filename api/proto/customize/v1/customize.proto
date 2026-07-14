@@ -1,0 +1,7 @@
+syntax = "proto3";
+package tickethub.customize.v1;
+option go_package = "tickethub/api/proto/customize/v1;customizev1";
+service CustomizeService { rpc RecordMessage(RecordMessageRequest) returns (RecordMessageReply); }
+message RecordMessageRequest { string message_id = 1; string topic = 2; string status = 3; }
+message RecordMessageReply { bool success = 1; }
+

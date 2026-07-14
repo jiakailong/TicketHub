@@ -1,0 +1,33 @@
+service:
+  name: program-service
+  env: local
+http:
+  addr: :8002
+  timeout: 5s
+grpc:
+  addr: :9002
+  timeout: 5s
+mysql:
+  dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub_program?parseTime=true&loc=Local&charset=utf8mb4
+redis:
+  addr: 127.0.0.1:6379
+  key_prefix: tickethub:program
+kafka:
+  brokers: [127.0.0.1:9094]
+  client_id: program-service
+  group_id: program-search-indexer
+  topics:
+    create_order: ticket_hub.create_order
+    program_changed: ticket_hub.program_changed
+grpc_upstreams:
+  user-service: 127.0.0.1:9001
+elasticsearch:
+  addresses: [http://127.0.0.1:9200]
+  index: tickethub_programs_current
+  version: v2
+  sync_interval: 5m
+  batch_size: 500
+observability:
+  metrics_addr: :19002
+  trace_otlp: http://127.0.0.1:4318
+  log_level: info

@@ -1,0 +1,41 @@
+service:
+  name: gateway-bff
+  env: local
+http:
+  addr: :8080
+  timeout: 5s
+grpc:
+  addr: :18080
+  timeout: 5s
+mysql:
+  dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub?parseTime=true&loc=Local&charset=utf8mb4
+redis:
+  addr: 127.0.0.1:6379
+  key_prefix: tickethub
+kafka:
+  brokers: [127.0.0.1:9094]
+  client_id: gateway-bff
+upstreams:
+  user-service: http://127.0.0.1:8001
+  program-service: http://127.0.0.1:8002
+  order-service: http://127.0.0.1:8003
+  pay-service: http://127.0.0.1:8004
+  base-data-service: http://127.0.0.1:8005
+  customize-service: http://127.0.0.1:8006
+  admin-service: http://127.0.0.1:8007
+  migrate-service: http://127.0.0.1:8008
+grpc_upstreams:
+  user-service: 127.0.0.1:9001
+  program-service: 127.0.0.1:9002
+  order-service: 127.0.0.1:9003
+  pay-service: 127.0.0.1:9004
+  base-data-service: 127.0.0.1:9005
+  customize-service: 127.0.0.1:9006
+  admin-service: 127.0.0.1:9007
+  migrate-service: 127.0.0.1:9008
+observability:
+  metrics_addr: :19080
+  trace_otlp: http://127.0.0.1:4318
+  log_level: info
+auth:
+  jwt_secret: ${TICKETHUB_JWT_SECRET}

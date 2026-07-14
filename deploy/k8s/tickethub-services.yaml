@@ -1,0 +1,168 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: tickethub
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+        - name: user-service
+          image: tickethub/user-service:local
+          ports:
+            - containerPort: 8001
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8001
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: tickethub
+spec:
+  selector:
+    app: user-service
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: program-service
+  namespace: tickethub
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: program-service
+  template:
+    metadata:
+      labels:
+        app: program-service
+    spec:
+      containers:
+        - name: program-service
+          image: tickethub/program-service:local
+          ports:
+            - containerPort: 8002
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8002
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8002
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: program-service
+  namespace: tickethub
+spec:
+  selector:
+    app: program-service
+  ports:
+    - name: http
+      port: 8002
+      targetPort: 8002
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: tickethub
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+        - name: order-service
+          image: tickethub/order-service:local
+          ports:
+            - containerPort: 8003
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8003
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8003
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: tickethub
+spec:
+  selector:
+    app: order-service
+  ports:
+    - name: http
+      port: 8003
+      targetPort: 8003
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pay-service
+  namespace: tickethub
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pay-service
+  template:
+    metadata:
+      labels:
+        app: pay-service
+    spec:
+      containers:
+        - name: pay-service
+          image: tickethub/pay-service:local
+          ports:
+            - containerPort: 8004
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8004
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8004
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pay-service
+  namespace: tickethub
+spec:
+  selector:
+    app: pay-service
+  ports:
+    - name: http
+      port: 8004
+      targetPort: 8004
+

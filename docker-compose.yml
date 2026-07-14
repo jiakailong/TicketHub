@@ -1,0 +1,185 @@
+name: tickethub
+
+services:
+  tickethub-etcd:
+    image: quay.io/coreos/etcd:v3.5.21
+    container_name: tickethub-etcd
+    command:
+      - /usr/local/bin/etcd
+      - --name=tickethub-etcd
+      - --data-dir=/etcd-data
+      - --advertise-client-urls=http://tickethub-etcd:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://tickethub-etcd:2380
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-cluster=tickethub-etcd=http://tickethub-etcd:2380
+      - --initial-cluster-state=new
+    ports:
+      - "127.0.0.1:2379:2379"
+    volumes:
+      - tickethub_etcd_data:/etcd-data
+    networks:
+      - tickethub-net
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  tickethub-apisix:
+    image: apache/apisix:3.9.0-debian
+    container_name: tickethub-apisix
+    depends_on:
+      tickethub-etcd:
+        condition: service_healthy
+    environment:
+      APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:?set APISIX_ADMIN_KEY in .env}
+    volumes:
+      - ./deploy/docker/apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+    ports:
+      - "127.0.0.1:9080:9080"
+      - "127.0.0.1:9443:9443"
+      - "127.0.0.1:9180:9180"
+    expose:
+      - "9091"
+    extra_hosts:
+      - "host.docker.internal:${TICKETHUB_HOST_IP:-host-gateway}"
+    networks:
+      - tickethub-net
+
+  tickethub-mysql:
+    image: mysql:8.4
+    container_name: tickethub-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TICKETHUB_MYSQL_ROOT_PASSWORD:?set TICKETHUB_MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: tickethub
+      MYSQL_USER: ${TICKETHUB_MYSQL_USER:?set TICKETHUB_MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${TICKETHUB_MYSQL_PASSWORD:?set TICKETHUB_MYSQL_PASSWORD in .env}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - tickethub_mysql_data:/var/lib/mysql
+      - ./deploy/docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - tickethub-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  tickethub-redis:
+    image: redis:7.2
+    container_name: tickethub-redis
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - tickethub_redis_data:/data
+      - ./deploy/docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - tickethub-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  tickethub-kafka:
+    image: apache/kafka:3.7.2
+    container_name: tickethub-kafka
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@tickethub-kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://tickethub-kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    ports:
+      - "127.0.0.1:9094:9094"
+    volumes:
+      - tickethub_kafka_data:/var/lib/kafka/data
+    networks:
+      - tickethub-net
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  tickethub-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    container_name: tickethub-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - tickethub_es_data:/usr/share/elasticsearch/data
+    networks:
+      - tickethub-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  tickethub-prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: tickethub-prometheus
+    volumes:
+      - ./deploy/docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    extra_hosts:
+      - "host.docker.internal:${TICKETHUB_HOST_IP:-host-gateway}"
+    networks:
+      - tickethub-net
+
+  tickethub-grafana:
+    image: grafana/grafana:11.1.0
+    container_name: tickethub-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${TICKETHUB_GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${TICKETHUB_GRAFANA_ADMIN_PASSWORD:?set TICKETHUB_GRAFANA_ADMIN_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - tickethub_grafana_data:/var/lib/grafana
+      - ./deploy/docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - tickethub-prometheus
+    networks:
+      - tickethub-net
+
+networks:
+  tickethub-net:
+    name: tickethub-net
+
+volumes:
+  tickethub_etcd_data:
+    name: tickethub_etcd_data
+  tickethub_mysql_data:
+    name: tickethub_mysql_data
+  tickethub_redis_data:
+    name: tickethub_redis_data
+  tickethub_kafka_data:
+    name: tickethub_kafka_data
+  tickethub_es_data:
+    name: tickethub_es_data
+  tickethub_grafana_data:
+    name: tickethub_grafana_data

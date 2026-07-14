@@ -1,0 +1,35 @@
+syntax = "proto3";
+package tickethub.migrate.v1;
+option go_package = "tickethub/api/proto/migrate/v1;migratev1";
+service MigrateService {
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskReply);
+  rpc ResumeTask(ResumeTaskRequest) returns (ResumeTaskReply);
+  rpc ListShardMappings(ListShardMappingsRequest) returns (ListShardMappingsReply);
+}
+message CreateTaskRequest {
+  string source_shard = 1;
+  string target_shard = 2;
+  int32 batch_size = 3;
+  int32 virtual_shard = 4;
+}
+message CreateTaskReply {
+  int64 task_id = 1;
+  int32 virtual_shard = 2;
+  string status = 3;
+}
+message ResumeTaskRequest { int64 task_id = 1; }
+message ResumeTaskReply {
+  int64 task_id = 1;
+  string status = 2;
+}
+message ListShardMappingsRequest {}
+message ListShardMappingsReply { repeated ShardMapping mappings = 1; }
+message ShardMapping {
+  int32 virtual_shard = 1;
+  string physical_db = 2;
+  string physical_table = 3;
+  string shadow_db = 4;
+  string shadow_table = 5;
+  string write_mode = 6;
+  int64 version = 7;
+}

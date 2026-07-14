@@ -1,0 +1,68 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Services Up",
+      "id": 1,
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "tickethub-prometheus"},
+      "targets": [{"expr": "sum(ticket_hub_service_up)", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Server Request Rate",
+      "id": 2,
+      "gridPos": {"h": 7, "w": 9, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "tickethub-prometheus"},
+      "targets": [{"expr": "sum by (service) (rate(ticket_hub_server_requests_total[5m]))", "legendFormat": "{{service}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Server P95 Latency",
+      "id": 3,
+      "gridPos": {"h": 7, "w": 9, "x": 15, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "tickethub-prometheus"},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, service) (rate(ticket_hub_server_request_duration_seconds_bucket[5m])))", "legendFormat": "{{service}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Create Order Throughput",
+      "id": 4,
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 7},
+      "datasource": {"type": "prometheus", "uid": "tickethub-prometheus"},
+      "targets": [{"expr": "sum by (result) (rate(ticket_hub_create_order_total[1m]))", "legendFormat": "{{result}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Kafka Consume Delay P95",
+      "id": 5,
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 7},
+      "datasource": {"type": "prometheus", "uid": "tickethub-prometheus"},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, topic) (rate(ticket_hub_kafka_consume_delay_seconds_bucket[5m])))", "legendFormat": "{{topic}}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Consistency and Payment Events",
+      "id": 6,
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 7},
+      "datasource": {"type": "prometheus", "uid": "tickethub-prometheus"},
+      "targets": [
+        {"expr": "sum(rate(ticket_hub_discard_order_total[5m]))", "legendFormat": "discard orders", "refId": "A"},
+        {"expr": "sum(rate(ticket_hub_reconciliation_mismatch_total[5m]))", "legendFormat": "reconciliation mismatch", "refId": "B"},
+        {"expr": "sum(rate(ticket_hub_payment_callback_total[5m]))", "legendFormat": "payment callbacks", "refId": "C"}
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["tickethub"],
+  "templating": {"list": []},
+  "time": {"from": "now-30m", "to": "now"},
+  "timezone": "browser",
+  "title": "TicketHub Overview",
+  "uid": "tickethub-overview",
+  "version": 1
+}

@@ -1,0 +1,22 @@
+service:
+  name: customize-service
+  env: local
+http:
+  addr: :8006
+  timeout: 5s
+grpc:
+  addr: :9006
+  timeout: 5s
+mysql:
+  dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub_customize?parseTime=true&loc=Local&charset=utf8mb4
+redis:
+  addr: 127.0.0.1:6379
+  key_prefix: tickethub:customize
+kafka:
+  brokers: [127.0.0.1:9094]
+  client_id: customize-service
+  group_id: customize-service
+observability:
+  metrics_addr: :19006
+  trace_otlp: http://127.0.0.1:4318
+  log_level: info

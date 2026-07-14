@@ -1,0 +1,35 @@
+syntax = "proto3";
+package tickethub.admin.v1;
+option go_package = "tickethub/api/proto/admin/v1;adminv1";
+service AdminService {
+  rpc Dashboard(DashboardRequest) returns (DashboardReply);
+  rpc RunReconciliation(RunReconciliationRequest) returns (RunReconciliationReply);
+}
+message DashboardRequest {}
+message DashboardReply { int64 discard_order_count = 1; int64 reconciliation_mismatch_count = 2; }
+message RunReconciliationRequest {
+  int64 program_id = 1;
+  bool repair_inventory = 2;
+}
+message RunReconciliationReply {
+  bool triggered = 1;
+  int64 program_id = 2;
+  int64 mismatch_count = 3;
+  int64 discard_order_count = 4;
+  int64 record_mismatch_count = 5;
+  int64 inventory_mismatch_count = 6;
+  int64 repaired_inventory_count = 7;
+  repeated InventoryDifference inventory_differences = 8;
+}
+
+message InventoryDifference {
+  int64 ticket_category_id = 1;
+  int64 total = 2;
+  int64 occupied_count = 3;
+  int64 expected_remain = 4;
+  int64 mysql_remain = 5;
+  int64 redis_remain = 6;
+  bool redis_exists = 7;
+  bool repaired = 8;
+  string reason = 9;
+}

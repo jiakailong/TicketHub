@@ -1,0 +1,71 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "index.max_ngram_diff": 19,
+    "analysis": {
+      "filter": {
+        "ticket_edge": {
+          "type": "edge_ngram",
+          "min_gram": 1,
+          "max_gram": 20
+        }
+      },
+      "analyzer": {
+        "ticket_text": {
+          "type": "standard"
+        },
+        "ticket_prefix": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "ticket_edge"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "id": {
+        "type": "long"
+      },
+      "title": {
+        "type": "text",
+        "analyzer": "ticket_text",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          },
+          "prefix": {
+            "type": "text",
+            "analyzer": "ticket_prefix",
+            "search_analyzer": "ticket_text"
+          }
+        }
+      },
+      "title_suggest": {
+        "type": "completion"
+      },
+      "city": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "place": {
+        "type": "text",
+        "analyzer": "ticket_text"
+      },
+      "show_time": {
+        "type": "date"
+      },
+      "status": {
+        "type": "keyword"
+      },
+      "updated_at": {
+        "type": "date"
+      }
+    }
+  }
+}

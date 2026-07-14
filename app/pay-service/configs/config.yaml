@@ -1,0 +1,23 @@
+service:
+  name: pay-service
+  env: local
+http:
+  addr: :8004
+  timeout: 5s
+grpc:
+  addr: :9004
+  timeout: 5s
+mysql:
+  dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub_pay?parseTime=true&loc=Local&charset=utf8mb4
+redis:
+  addr: 127.0.0.1:6379
+  key_prefix: tickethub:pay
+kafka:
+  brokers: [127.0.0.1:9094]
+  client_id: pay-service
+grpc_upstreams:
+  order-service: 127.0.0.1:9003
+observability:
+  metrics_addr: :19004
+  trace_otlp: http://127.0.0.1:4318
+  log_level: info

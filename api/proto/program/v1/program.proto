@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package tickethub.program.v1;
+
+option go_package = "tickethub/api/proto/program/v1;programv1";
+
+service ProgramService {
+  rpc SearchProgram(SearchProgramRequest) returns (SearchProgramReply);
+  rpc GetProgramDetail(GetProgramDetailRequest) returns (ProgramDetail);
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderReply);
+  rpc ConfirmSeatsSold(SeatOperationRequest) returns (SeatOperationReply);
+  rpc ReleaseSeats(SeatOperationRequest) returns (SeatOperationReply);
+  rpc RollbackCreateOrder(SeatOperationRequest) returns (SeatOperationReply);
+  rpc ReserveCreateOrder(SeatOperationRequest) returns (SeatOperationReply);
+  rpc ReconcileInventory(ReconcileInventoryRequest) returns (ReconcileInventoryReply);
+}
+
+message SearchProgramRequest {
+  string keyword = 1;
+  string city = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  string cursor = 5;
+}
+
+message SearchProgramReply {
+  repeated ProgramSummary programs = 1;
+  string next_cursor = 2;
+}
+
+message ProgramSummary {
+  int64 id = 1;
+  string title = 2;
+  string city = 3;
+  string place = 4;
+  string show_time = 5;
+  string status = 6;
+  int64 min_price_cent = 7;
+}
+
+message GetProgramDetailRequest {
+  int64 program_id = 1;
+  int64 ticket_category_id = 2;
+}
+
+message ProgramDetail {
+  int64 id = 1;
+  string title = 2;
+  repeated TicketCategory ticket_categories = 3;
+  string city = 4;
+  string place = 5;
+  string show_time = 6;
+  string status = 7;
+  repeated Seat seats = 8;
+}
+
+message TicketCategory {
+  int64 id = 1;
+  string name = 2;
+  int64 price_cent = 3;
+  int64 remain = 4;
+}
+
+message Seat {
+  int64 id = 1;
+  int64 ticket_category_id = 2;
+  string row_code = 3;
+  string col_code = 4;
+  int64 price_cent = 5;
+  string status = 6;
+}
+
+message CreateOrderRequest {
+  int64 user_id = 1;
+  int64 program_id = 2;
+  int64 ticket_category_id = 3;
+  repeated int64 seat_ids = 4;
+  repeated int64 ticket_user_ids = 5;
+  string request_id = 6;
+}
+
+message CreateOrderReply {
+  int64 order_number = 1;
+}
+
+message SeatOperationRequest {
+  int64 program_id = 1;
+  int64 order_number = 2;
+  repeated int64 seat_ids = 3;
+  int64 ticket_category_id = 4;
+  int64 count = 5;
+  repeated int64 ticket_user_ids = 6;
+}
+
+message SeatOperationReply {
+  bool success = 1;
+}
+
+message TicketCategoryUsage {
+  int64 ticket_category_id = 1;
+  int64 occupied_count = 2;
+}
+
+message ReconcileInventoryRequest {
+  int64 program_id = 1;
+  repeated TicketCategoryUsage usages = 2;
+  bool repair = 3;
+}
+
+message InventoryDifference {
+  int64 ticket_category_id = 1;
+  int64 total = 2;
+  int64 occupied_count = 3;
+  int64 expected_remain = 4;
+  int64 mysql_remain = 5;
+  int64 redis_remain = 6;
+  bool redis_exists = 7;
+  bool repaired = 8;
+  string reason = 9;
+}
+
+message ReconcileInventoryReply {
+  int64 mismatch_count = 1;
+  int64 repaired_count = 2;
+  repeated InventoryDifference differences = 3;
+}

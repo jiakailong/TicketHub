@@ -1,0 +1,40 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets/
+
+# Go build and test output
+/bin/
+*.test
+*.out
+coverage/
+coverage.*
+/tmp/
+
+# Frontend dependencies and generated output
+/web/node_modules/
+/web/dist/
+/web/.run/
+/web/playwright-report/
+/web/test-results/
+
+# Runtime data and logs
+/.run/
+*.log
+*.pid
+
+# Editors and operating systems
+/.idea/
+/.vscode/
+*.iml
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+

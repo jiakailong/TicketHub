@@ -1,0 +1,10 @@
+apiVersion: 1
+
+datasources:
+  - name: TicketHub Prometheus
+    uid: tickethub-prometheus
+    type: prometheus
+    access: proxy
+    url: http://tickethub-prometheus:9090
+    isDefault: true
+    editable: false

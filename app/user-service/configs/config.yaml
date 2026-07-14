@@ -1,0 +1,28 @@
+service:
+  name: user-service
+  env: local
+http:
+  addr: :8001
+  timeout: 5s
+grpc:
+  addr: :9001
+  timeout: 5s
+mysql:
+  dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub_user?parseTime=true&loc=Local&charset=utf8mb4
+redis:
+  addr: 127.0.0.1:6379
+  key_prefix: tickethub:user
+kafka:
+  brokers: [127.0.0.1:9094]
+  client_id: user-service
+observability:
+  metrics_addr: :19001
+  trace_otlp: http://127.0.0.1:4318
+  log_level: info
+auth:
+  jwt_secret: ${TICKETHUB_JWT_SECRET}
+  admin_mobiles: []
+privacy:
+  active_key_version: ${TICKETHUB_PRIVACY_ACTIVE_KEY_VERSION}
+  encryption_keys: {}
+  lookup_key: ${TICKETHUB_PRIVACY_LOOKUP_KEY}

@@ -1,0 +1,13 @@
+syntax = "proto3";
+package tickethub.base.v1;
+option go_package = "tickethub/api/proto/base/v1;basev1";
+service BaseDataService {
+  rpc ListAreas(ListAreasRequest) returns (ListAreasReply);
+  rpc ListChannelData(ListChannelDataRequest) returns (ListChannelDataReply);
+}
+message ListAreasRequest { int64 parent_id = 1; }
+message Area { int64 id = 1; int64 parent_id = 2; string name = 3; int32 level = 4; bool hot = 5; }
+message ListAreasReply { repeated Area areas = 1; }
+message ListChannelDataRequest {}
+message ChannelData { int64 id = 1; string code = 2; string value = 3; }
+message ListChannelDataReply { repeated ChannelData channels = 1; }

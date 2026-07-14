@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package tickethub.order.v1;
+
+option go_package = "tickethub/api/proto/order/v1;orderv1";
+
+service OrderService {
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderReply);
+  rpc GetOrder(GetOrderRequest) returns (OrderReply);
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersReply);
+  rpc CancelOrder(CancelOrderRequest) returns (OrderReply);
+  rpc GetOrderPayment(GetOrderPaymentRequest) returns (OrderPaymentReply);
+  rpc HandlePaymentCallback(PaymentCallbackRequest) returns (PaymentCallbackReply);
+  rpc MarkOrderRefunded(MarkOrderRefundedRequest) returns (OrderReply);
+  rpc ReconcileProgram(ReconcileProgramRequest) returns (ReconcileProgramReply);
+}
+
+message CreateOrderRequest {
+  int64 order_number = 1;
+  int64 program_id = 2;
+  int64 user_id = 3;
+  int64 amount_cent = 4;
+  repeated int64 seat_ids = 5;
+}
+
+message CreateOrderReply {
+  int64 order_number = 1;
+}
+
+message GetOrderRequest {
+  int64 order_number = 1;
+  int64 user_id = 2;
+}
+
+message ListOrdersRequest {
+  int64 user_id = 1;
+  int32 limit = 2;
+  string status = 3;
+  string cursor = 4;
+}
+
+message ListOrdersReply {
+  repeated OrderReply orders = 1;
+  string next_cursor = 2;
+}
+
+message CancelOrderRequest {
+  int64 order_number = 1;
+  int64 user_id = 2;
+}
+
+message GetOrderPaymentRequest {
+  int64 order_number = 1;
+  int64 user_id = 2;
+}
+
+message OrderPaymentReply {
+  string status = 1;
+  int64 amount_cent = 2;
+}
+
+message PaymentCallbackRequest {
+  int64 order_number = 1;
+  int64 amount_cent = 2;
+  bool paid = 3;
+}
+
+message PaymentCallbackReply {
+  string status = 1;
+  bool refund_required = 2;
+  int64 amount_cent = 3;
+}
+
+message MarkOrderRefundedRequest {
+  int64 order_number = 1;
+}
+
+message OrderReply {
+  int64 order_number = 1;
+  string status = 2;
+  int64 amount_cent = 3;
+  int64 program_id = 4;
+  int64 ticket_category_id = 5;
+  repeated int64 seat_ids = 6;
+  repeated int64 ticket_user_ids = 7;
+  string created_at = 8;
+  string paid_at = 9;
+  string canceled_at = 10;
+  string refunded_at = 11;
+}
+
+message ReconcileProgramRequest {
+  int64 program_id = 1;
+  bool repair_inventory = 2;
+}
+
+message ReconcileProgramReply {
+  int64 mismatch_count = 1;
+  int64 record_mismatch_count = 2;
+  int64 inventory_mismatch_count = 3;
+  int64 repaired_inventory_count = 4;
+  repeated InventoryDifference inventory_differences = 5;
+}
+
+message InventoryDifference {
+  int64 ticket_category_id = 1;
+  int64 total = 2;
+  int64 occupied_count = 3;
+  int64 expected_remain = 4;
+  int64 mysql_remain = 5;
+  int64 redis_remain = 6;
+  bool redis_exists = 7;
+  bool repaired = 8;
+  string reason = 9;
+}

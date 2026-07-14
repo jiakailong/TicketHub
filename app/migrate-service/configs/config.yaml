@@ -1,0 +1,34 @@
+service:
+  name: migrate-service
+  env: local
+http:
+  addr: :8008
+  timeout: 5s
+grpc:
+  addr: :9008
+  timeout: 5s
+mysql:
+  dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub_migrate?parseTime=true&loc=Local&charset=utf8mb4
+sharding:
+  enabled: false
+  database_prefix: tickethub_order
+  table_prefix: orders
+  database_count: 2
+  table_count: 2
+  databases:
+    tickethub_order_0:
+      dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub_order_0?parseTime=true&loc=Local&charset=utf8mb4
+    tickethub_order_1:
+      dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub_order_1?parseTime=true&loc=Local&charset=utf8mb4
+    tickethub_order_2:
+      dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub_order_2?parseTime=true&loc=Local&charset=utf8mb4
+redis:
+  addr: 127.0.0.1:6379
+  key_prefix: tickethub:migrate
+kafka:
+  brokers: [127.0.0.1:9094]
+  client_id: migrate-service
+observability:
+  metrics_addr: :19008
+  trace_otlp: http://127.0.0.1:4318
+  log_level: info

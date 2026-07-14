@@ -1,0 +1,22 @@
+CREATE DATABASE IF NOT EXISTS tickethub_user DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS tickethub_program DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS tickethub_order DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS tickethub_pay DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS tickethub_base DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS tickethub_customize DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS tickethub_migrate DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS tickethub_order_0 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS tickethub_order_1 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS tickethub_order_2 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+GRANT ALL PRIVILEGES ON tickethub_user.* TO 'tickethub'@'%';
+GRANT ALL PRIVILEGES ON tickethub_program.* TO 'tickethub'@'%';
+GRANT ALL PRIVILEGES ON tickethub_order.* TO 'tickethub'@'%';
+GRANT ALL PRIVILEGES ON tickethub_order_0.* TO 'tickethub'@'%';
+GRANT ALL PRIVILEGES ON tickethub_order_1.* TO 'tickethub'@'%';
+GRANT ALL PRIVILEGES ON tickethub_order_2.* TO 'tickethub'@'%';
+GRANT ALL PRIVILEGES ON tickethub_pay.* TO 'tickethub'@'%';
+GRANT ALL PRIVILEGES ON tickethub_base.* TO 'tickethub'@'%';
+GRANT ALL PRIVILEGES ON tickethub_customize.* TO 'tickethub'@'%';
+GRANT ALL PRIVILEGES ON tickethub_migrate.* TO 'tickethub'@'%';
+FLUSH PRIVILEGES;
