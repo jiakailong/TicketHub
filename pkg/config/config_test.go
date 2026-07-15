@@ -28,6 +28,9 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if cfg.HTTP.TimeoutDuration(time.Second) != 5*time.Second {
 		t.Fatalf("expected default http timeout")
 	}
+	if cfg.Cache.LocalTTLDuration() != 45*time.Second || cfg.Cache.RedisTTLDuration() != 5*time.Minute {
+		t.Fatalf("unexpected cache defaults: %+v", cfg.Cache)
+	}
 }
 
 func TestLoadValidatesEnabledShardDatabases(t *testing.T) {

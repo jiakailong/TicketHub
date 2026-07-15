@@ -65,6 +65,12 @@ func (r ProgramEventRunner) handle(ctx context.Context, event mq.Event) error {
 	if err := json.Unmarshal(event.Payload, &changed); err != nil {
 		return err
 	}
+	// Cache invalidation must not depend on Elasticsearch availability.
+	if r.cache != nil {
+		if err := r.cache.Invalidate(ctx, changed.ProgramID); err != nil {
+			return err
+		}
+	}
 	if err := r.indexer.EnsureIndex(ctx); err != nil {
 		return err
 	}
@@ -77,11 +83,6 @@ func (r ProgramEventRunner) handle(ctx context.Context, event mq.Event) error {
 			ID: changed.ProgramID, Title: changed.Title, City: changed.City, Place: changed.Place,
 			ShowTime: changed.ShowTime, Status: changed.Status,
 		}}); err != nil {
-			return err
-		}
-	}
-	if r.cache != nil {
-		if err := r.cache.Invalidate(ctx, changed.ProgramID); err != nil {
 			return err
 		}
 	}

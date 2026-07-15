@@ -3,9 +3,14 @@ package worker
 import "context"
 
 type Runner struct {
-	index  IndexSyncRunner
-	outbox OutboxRunner
-	events ProgramEventRunner
+	index             IndexSyncRunner
+	outbox            OutboxRunner
+	events            ProgramEventRunner
+	cacheInvalidation BackgroundRunner
+}
+
+type BackgroundRunner interface {
+	Start(ctx context.Context)
 }
 
 func (r Runner) WithProgramEvents(events ProgramEventRunner) Runner {
@@ -22,8 +27,16 @@ func (r Runner) WithOutbox(outbox OutboxRunner) Runner {
 	return r
 }
 
+func (r Runner) WithCacheInvalidation(cacheInvalidation BackgroundRunner) Runner {
+	r.cacheInvalidation = cacheInvalidation
+	return r
+}
+
 func (r Runner) Start(ctx context.Context) {
 	r.index.Start(ctx)
 	r.outbox.Start(ctx)
 	r.events.Start(ctx)
+	if r.cacheInvalidation != nil {
+		r.cacheInvalidation.Start(ctx)
+	}
 }

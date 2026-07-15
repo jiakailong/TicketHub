@@ -25,6 +25,7 @@ import (
 	"tickethub/pkg/config"
 	"tickethub/pkg/db"
 	"tickethub/pkg/idgen"
+	"tickethub/pkg/lock"
 	"tickethub/pkg/mq"
 	thredis "tickethub/pkg/redis"
 )
@@ -77,6 +78,7 @@ func buildHandlers(cfg config.Config) (programhttp.Handler, programgrpc.Server, 
 	var programEvents programworker.ProgramEventRunner
 	var indexRunner programworker.IndexSyncRunner
 	var outboxRunner programworker.OutboxRunner
+	var cacheInvalidation programworker.BackgroundRunner
 	if cfg.UseInfrastructure() {
 		mysqlDB, err := db.OpenMySQL(context.Background(), cfg.MySQL)
 		if err != nil {
@@ -91,8 +93,31 @@ func buildHandlers(cfg config.Config) (programhttp.Handler, programgrpc.Server, 
 		redisClient := thredis.NewClient(cfg.Redis)
 		lua := cache.NewRedisLuaExecutor(redisClient)
 		keys := cache.NewKeyBuilder(cfg.Redis.KeyPrefix)
-		queryCache := programredis.NewProgramQueryCache(programs, redisClient, keys, 2*time.Minute)
+		localCache, err := cache.NewRistrettoLocal(cache.RistrettoConfig{
+			NumCounters: cfg.Cache.LocalNumCounters,
+			MaxCost:     cfg.Cache.LocalMaxCostBytes,
+			BufferItems: cfg.Cache.LocalBufferItems,
+		})
+		if err != nil {
+			return programhttp.Handler{}, programgrpc.Server{}, programworker.Runner{}, err
+		}
+		queryCache := programredis.NewProgramQueryCache(
+			programs,
+			redisClient,
+			keys,
+			localCache,
+			cache.NewStripedRWMutex(cfg.Cache.LocalLockStripes),
+			lock.NewRedisLocker(redisClient),
+			programredis.QueryCacheOptions{
+				LocalTTL:       cfg.Cache.LocalTTLDuration(),
+				RedisTTL:       cfg.Cache.RedisTTLDuration(),
+				RebuildLockTTL: cfg.Cache.RebuildLockTTLDuration(),
+				RebuildWait:    cfg.Cache.RebuildWaitDuration(),
+				RebuildPoll:    cfg.Cache.RebuildPollDuration(),
+			},
+		)
 		queryPrograms = queryCache
+		cacheInvalidation = programredis.NewCacheInvalidationSubscriber(redisClient, queryCache)
 		inventoryStore := programredis.NewInventoryStore(redisClient, keys)
 		bootstrapResult, err := programapp.NewInventoryBootstrapService(mysqlPrograms, inventoryStore, 500).Bootstrap(context.Background())
 		if err != nil {
@@ -156,6 +181,9 @@ func buildHandlers(cfg config.Config) (programhttp.Handler, programgrpc.Server, 
 		programapp.NewTicketUserOwnershipRule(ticketUsers),
 	)).WithIdempotency(idempotency).WithRateLimiter(purchaseRateLimiter)
 	queries := programapp.NewProgramQueryService(queryPrograms)
-	runner := programworker.NewRunner(indexRunner).WithOutbox(outboxRunner).WithProgramEvents(programEvents)
+	runner := programworker.NewRunner(indexRunner).
+		WithOutbox(outboxRunner).
+		WithProgramEvents(programEvents).
+		WithCacheInvalidation(cacheInvalidation)
 	return programhttp.NewHandler(usecase, queries).WithAdmin(adminPrograms), programgrpc.NewServer(queries, usecase, seatStates, inventoryReconciliation).WithReservations(inventory), runner, nil
 }

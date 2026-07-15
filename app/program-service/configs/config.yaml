@@ -12,6 +12,16 @@ mysql:
 redis:
   addr: 127.0.0.1:6379
   key_prefix: tickethub:program
+cache:
+  local_num_counters: 100000
+  local_max_cost_bytes: 67108864
+  local_buffer_items: 64
+  local_lock_stripes: 256
+  local_ttl: 45s
+  redis_ttl: 5m
+  rebuild_lock_ttl: 5s
+  rebuild_wait: 750ms
+  rebuild_poll: 25ms
 kafka:
   brokers: [127.0.0.1:9094]
   client_id: program-service

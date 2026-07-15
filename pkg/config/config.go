@@ -17,6 +17,7 @@ type Config struct {
 	MySQL         MySQLConfig         `yaml:"mysql"`
 	Sharding      ShardingConfig      `yaml:"sharding"`
 	Redis         RedisConfig         `yaml:"redis"`
+	Cache         CacheConfig         `yaml:"cache"`
 	Kafka         KafkaConfig         `yaml:"kafka"`
 	Elasticsearch ElasticsearchConfig `yaml:"elasticsearch"`
 	Upstreams     map[string]string   `yaml:"upstreams"`
@@ -58,6 +59,18 @@ type RedisConfig struct {
 	Password  string `yaml:"password"`
 	DB        int    `yaml:"db"`
 	KeyPrefix string `yaml:"key_prefix"`
+}
+
+type CacheConfig struct {
+	LocalNumCounters  int64  `yaml:"local_num_counters"`
+	LocalMaxCostBytes int64  `yaml:"local_max_cost_bytes"`
+	LocalBufferItems  int64  `yaml:"local_buffer_items"`
+	LocalLockStripes  int    `yaml:"local_lock_stripes"`
+	LocalTTL          string `yaml:"local_ttl"`
+	RedisTTL          string `yaml:"redis_ttl"`
+	RebuildLockTTL    string `yaml:"rebuild_lock_ttl"`
+	RebuildWait       string `yaml:"rebuild_wait"`
+	RebuildPoll       string `yaml:"rebuild_poll"`
 }
 
 type KafkaConfig struct {
@@ -143,6 +156,33 @@ func (c *Config) ApplyDefaults() {
 	if c.MySQL.MaxIdleConns == 0 {
 		c.MySQL.MaxIdleConns = 8
 	}
+	if c.Cache.LocalNumCounters <= 0 {
+		c.Cache.LocalNumCounters = 100_000
+	}
+	if c.Cache.LocalMaxCostBytes <= 0 {
+		c.Cache.LocalMaxCostBytes = 64 << 20
+	}
+	if c.Cache.LocalBufferItems <= 0 {
+		c.Cache.LocalBufferItems = 64
+	}
+	if c.Cache.LocalLockStripes <= 0 {
+		c.Cache.LocalLockStripes = 256
+	}
+	if c.Cache.LocalTTL == "" {
+		c.Cache.LocalTTL = "45s"
+	}
+	if c.Cache.RedisTTL == "" {
+		c.Cache.RedisTTL = "5m"
+	}
+	if c.Cache.RebuildLockTTL == "" {
+		c.Cache.RebuildLockTTL = "5s"
+	}
+	if c.Cache.RebuildWait == "" {
+		c.Cache.RebuildWait = "750ms"
+	}
+	if c.Cache.RebuildPoll == "" {
+		c.Cache.RebuildPoll = "25ms"
+	}
 	if c.Sharding.DatabasePrefix == "" {
 		c.Sharding.DatabasePrefix = "tickethub_order"
 	}
@@ -217,6 +257,34 @@ func (c *Config) ApplyDefaults() {
 	if value := strings.TrimSpace(os.Getenv("TICKETHUB_PRIVACY_LOOKUP_KEY")); value != "" {
 		c.Privacy.LookupKey = value
 	}
+}
+
+func (c CacheConfig) LocalTTLDuration() time.Duration {
+	return parseDuration(c.LocalTTL, 45*time.Second)
+}
+
+func (c CacheConfig) RedisTTLDuration() time.Duration {
+	return parseDuration(c.RedisTTL, 5*time.Minute)
+}
+
+func (c CacheConfig) RebuildLockTTLDuration() time.Duration {
+	return parseDuration(c.RebuildLockTTL, 5*time.Second)
+}
+
+func (c CacheConfig) RebuildWaitDuration() time.Duration {
+	return parseDuration(c.RebuildWait, 750*time.Millisecond)
+}
+
+func (c CacheConfig) RebuildPollDuration() time.Duration {
+	return parseDuration(c.RebuildPoll, 25*time.Millisecond)
+}
+
+func parseDuration(value string, fallback time.Duration) time.Duration {
+	parsed, err := time.ParseDuration(strings.TrimSpace(value))
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func (e ElasticsearchConfig) SyncIntervalDuration(defaultValue time.Duration) time.Duration {
