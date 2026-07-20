@@ -88,18 +88,23 @@ func buildHandlers(cfg config.Config) (programhttp.Handler, programgrpc.Server, 
 		programs = programes.NewProgramRepositoryWithIndex(mysqlPrograms, cfg.Elasticsearch.Addresses, cfg.Elasticsearch.Index)
 		queryPrograms = programs
 		indexer := programes.NewVersionedProgramIndexer(cfg.Elasticsearch.Addresses, cfg.Elasticsearch.Index, cfg.Elasticsearch.Version)
-		syncer := programapp.NewProgramIndexSyncService(mysqlPrograms, indexer, cfg.Elasticsearch.BatchSize)
-		indexRunner = programworker.NewIndexSyncRunner(syncer, cfg.Elasticsearch.SyncIntervalDuration(5*time.Minute))
+		if cfg.Workers.Enabled("index_sync") {
+			syncer := programapp.NewProgramIndexSyncService(mysqlPrograms, indexer, cfg.Elasticsearch.BatchSize)
+			indexRunner = programworker.NewIndexSyncRunner(syncer, cfg.Elasticsearch.SyncIntervalDuration(5*time.Minute))
+		}
 		redisClient := thredis.NewClient(cfg.Redis)
 		lua := cache.NewRedisLuaExecutor(redisClient)
 		keys := cache.NewKeyBuilder(cfg.Redis.KeyPrefix)
-		localCache, err := cache.NewRistrettoLocal(cache.RistrettoConfig{
-			NumCounters: cfg.Cache.LocalNumCounters,
-			MaxCost:     cfg.Cache.LocalMaxCostBytes,
-			BufferItems: cfg.Cache.LocalBufferItems,
-		})
-		if err != nil {
-			return programhttp.Handler{}, programgrpc.Server{}, programworker.Runner{}, err
+		var localCache cache.Local
+		if cfg.Cache.ModeName() == "multilevel" {
+			localCache, err = cache.NewRistrettoLocal(cache.RistrettoConfig{
+				NumCounters: cfg.Cache.LocalNumCounters,
+				MaxCost:     cfg.Cache.LocalMaxCostBytes,
+				BufferItems: cfg.Cache.LocalBufferItems,
+			})
+			if err != nil {
+				return programhttp.Handler{}, programgrpc.Server{}, programworker.Runner{}, err
+			}
 		}
 		queryCache := programredis.NewProgramQueryCache(
 			programs,
@@ -116,8 +121,12 @@ func buildHandlers(cfg config.Config) (programhttp.Handler, programgrpc.Server, 
 				RebuildPoll:    cfg.Cache.RebuildPollDuration(),
 			},
 		)
-		queryPrograms = queryCache
-		cacheInvalidation = programredis.NewCacheInvalidationSubscriber(redisClient, queryCache)
+		if cfg.Cache.ModeName() != "mysql" {
+			queryPrograms = queryCache
+			if cfg.Workers.Enabled("cache_invalidation") {
+				cacheInvalidation = programredis.NewCacheInvalidationSubscriber(redisClient, queryCache)
+			}
+		}
 		inventoryStore := programredis.NewInventoryStore(redisClient, keys)
 		bootstrapResult, err := programapp.NewInventoryBootstrapService(mysqlPrograms, inventoryStore, 500).Bootstrap(context.Background())
 		if err != nil {
@@ -131,7 +140,14 @@ func buildHandlers(cfg config.Config) (programhttp.Handler, programgrpc.Server, 
 		)
 		seatStates = programredis.NewSeatStateWriter(keys, lua)
 		idempotency = programredis.NewIdempotencyStore(redisClient, keys)
-		purchaseRateLimiter = programredis.NewPurchaseRateLimiter(redisClient, keys, 3, 6, 1000, 1500)
+		purchaseRateLimiter = programredis.NewPurchaseRateLimiter(
+			redisClient,
+			keys,
+			cfg.PurchaseRateLimit.UserRate,
+			cfg.PurchaseRateLimit.UserBurst,
+			cfg.PurchaseRateLimit.ProgramRate,
+			cfg.PurchaseRateLimit.ProgramBurst,
+		)
 		inventoryReconciliation = programapp.NewInventoryReconciliationService(
 			mysqlPrograms,
 			inventoryStore,
@@ -142,9 +158,13 @@ func buildHandlers(cfg config.Config) (programhttp.Handler, programgrpc.Server, 
 		kafkaPublisher := mq.NewKafkaProducer(cfg.Kafka.Brokers, cfg.Kafka.ClientID)
 		outboxRepository := programmysql.NewOutboxRepository(mysqlDB)
 		publisher = programapp.NewOutboxPublisher(outboxRepository)
-		outboxRunner = programworker.NewOutboxRunner(outboxRepository, kafkaPublisher)
+		if cfg.Workers.Enabled("outbox") {
+			outboxRunner = programworker.NewOutboxRunner(outboxRepository, kafkaPublisher)
+		}
 		programEventConsumer := mq.NewKafkaConsumer(cfg.Kafka.Brokers, cfg.Kafka.GroupID)
-		programEvents = programworker.NewProgramEventRunner(programEventConsumer, cfg.Kafka.Topics["program_changed"], indexer, queryCache)
+		if cfg.Workers.Enabled("program_events") {
+			programEvents = programworker.NewProgramEventRunner(programEventConsumer, cfg.Kafka.Topics["program_changed"], indexer, queryCache)
+		}
 		ticketUserClient, err := programrpc.NewTicketUserClient(cfg.GRPCUpstreams["user-service"])
 		if err != nil {
 			return programhttp.Handler{}, programgrpc.Server{}, programworker.Runner{}, err

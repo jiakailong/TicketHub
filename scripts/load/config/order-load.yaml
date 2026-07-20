@@ -1,0 +1,38 @@
+service:
+  name: order-service
+  env: load
+  adapter_mode: infra
+http:
+  addr: :8003
+  timeout: 5s
+grpc:
+  addr: :9003
+  timeout: 5s
+mysql:
+  dsn: ${TICKETHUB_MYSQL_USER}:${TICKETHUB_MYSQL_PASSWORD}@tcp(${TICKETHUB_MYSQL_HOST})/tickethub_order?parseTime=true&loc=Local&charset=utf8mb4
+  max_open_conns: 100
+  max_idle_conns: 50
+sharding:
+  enabled: false
+redis:
+  addr: 127.0.0.1:6379
+  key_prefix: tickethub:order
+kafka:
+  brokers: [127.0.0.1:9094]
+  client_id: order-service-load
+  group_id: order-service-load-v1
+  topics:
+    create_order: ticket_hub.create_order
+grpc_upstreams:
+  program-service: ""
+workers:
+  disabled: [cancel_order]
+  poll_interval: 100ms
+  create_batch_size: 128
+  cancel_batch_size: 128
+  cancel_delay: 15m
+  delay_visibility_timeout: 2m
+  fail_before_ack_count: 0
+observability:
+  metrics_addr: :19003
+  log_level: info

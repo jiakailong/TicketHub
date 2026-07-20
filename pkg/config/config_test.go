@@ -33,6 +33,51 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadAppliesProductionLoadTestDefaults(t *testing.T) {
+	cfg := Config{Service: ServiceConfig{Name: "order-service"}, HTTP: EndpointConfig{Addr: ":8003"}}
+	cfg.ApplyDefaults()
+	if cfg.Cache.ModeName() != "multilevel" {
+		t.Fatalf("cache mode = %s", cfg.Cache.ModeName())
+	}
+	if got := cfg.Workers.CancelDelayDuration(); got != 15*time.Minute {
+		t.Fatalf("cancel delay = %s", got)
+	}
+	if got := cfg.Workers.DelayVisibilityDuration(); got != 2*time.Minute {
+		t.Fatalf("visibility = %s", got)
+	}
+	if got := cfg.Workers.PollIntervalDuration(); got != time.Second {
+		t.Fatalf("poll interval = %s", got)
+	}
+	if cfg.Workers.CreateBatchSize != 32 || cfg.Workers.CancelBatchSize != 32 {
+		t.Fatalf("batch sizes = %d/%d", cfg.Workers.CreateBatchSize, cfg.Workers.CancelBatchSize)
+	}
+	if cfg.PurchaseRateLimit.ProgramRate != 1000 || cfg.PurchaseRateLimit.ProgramBurst != 1500 {
+		t.Fatalf("program limiter = %+v", cfg.PurchaseRateLimit)
+	}
+}
+
+func TestValidateRejectsUnknownCacheMode(t *testing.T) {
+	cfg := Config{Service: ServiceConfig{Name: "program-service"}, HTTP: EndpointConfig{Addr: ":8002"}}
+	cfg.Cache.Mode = "unknown"
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected invalid cache mode")
+	}
+}
+
+func TestValidateRestrictsWorkerFailpointToLoadEnvironment(t *testing.T) {
+	cfg := Config{Service: ServiceConfig{Name: "order-service", Env: "local"}, HTTP: EndpointConfig{Addr: ":8003"}}
+	cfg.Workers.FailBeforeAckCount = 1
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected failpoint outside load environment to be rejected")
+	}
+	cfg.Service.Env = "load"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("load failpoint rejected: %v", err)
+	}
+}
+
 func TestLoadValidatesEnabledShardDatabases(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
@@ -115,5 +160,16 @@ func TestLoadExpandsEnvironmentVariables(t *testing.T) {
 	}
 	if cfg.Auth.JWTSecret != "expanded-secret" {
 		t.Fatalf("jwt secret was not expanded")
+	}
+}
+
+func TestEndpointEnvironmentOverridesSupportLocalReplicas(t *testing.T) {
+	t.Setenv("TICKETHUB_HTTP_ADDR", ":8103")
+	t.Setenv("TICKETHUB_GRPC_ADDR", ":9103")
+	t.Setenv("TICKETHUB_METRICS_ADDR", ":19103")
+	cfg := Config{Service: ServiceConfig{Name: "order-service"}}
+	cfg.ApplyDefaults()
+	if cfg.HTTP.Addr != ":8103" || cfg.GRPC.Addr != ":9103" || cfg.Observability.MetricsAddr != ":19103" {
+		t.Fatalf("endpoint overrides = http:%s grpc:%s metrics:%s", cfg.HTTP.Addr, cfg.GRPC.Addr, cfg.Observability.MetricsAddr)
 	}
 }

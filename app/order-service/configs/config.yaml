@@ -25,6 +25,14 @@ sharding:
 redis:
   addr: 127.0.0.1:6379
   key_prefix: tickethub:order
+workers:
+  disabled: []
+  poll_interval: 1s
+  create_batch_size: 32
+  cancel_batch_size: 32
+  cancel_delay: 15m
+  delay_visibility_timeout: 2m
+  fail_before_ack_count: 0
 kafka:
   brokers: [127.0.0.1:9094]
   client_id: order-service

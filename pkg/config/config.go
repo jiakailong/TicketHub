@@ -11,20 +11,22 @@ import (
 )
 
 type Config struct {
-	Service       ServiceConfig       `yaml:"service"`
-	HTTP          EndpointConfig      `yaml:"http"`
-	GRPC          EndpointConfig      `yaml:"grpc"`
-	MySQL         MySQLConfig         `yaml:"mysql"`
-	Sharding      ShardingConfig      `yaml:"sharding"`
-	Redis         RedisConfig         `yaml:"redis"`
-	Cache         CacheConfig         `yaml:"cache"`
-	Kafka         KafkaConfig         `yaml:"kafka"`
-	Elasticsearch ElasticsearchConfig `yaml:"elasticsearch"`
-	Upstreams     map[string]string   `yaml:"upstreams"`
-	GRPCUpstreams map[string]string   `yaml:"grpc_upstreams"`
-	Observability ObservabilityConfig `yaml:"observability"`
-	Auth          AuthConfig          `yaml:"auth"`
-	Privacy       PrivacyConfig       `yaml:"privacy"`
+	Service           ServiceConfig           `yaml:"service"`
+	HTTP              EndpointConfig          `yaml:"http"`
+	GRPC              EndpointConfig          `yaml:"grpc"`
+	MySQL             MySQLConfig             `yaml:"mysql"`
+	Sharding          ShardingConfig          `yaml:"sharding"`
+	Redis             RedisConfig             `yaml:"redis"`
+	Cache             CacheConfig             `yaml:"cache"`
+	PurchaseRateLimit PurchaseRateLimitConfig `yaml:"purchase_rate_limit"`
+	Workers           WorkerConfig            `yaml:"workers"`
+	Kafka             KafkaConfig             `yaml:"kafka"`
+	Elasticsearch     ElasticsearchConfig     `yaml:"elasticsearch"`
+	Upstreams         map[string]string       `yaml:"upstreams"`
+	GRPCUpstreams     map[string]string       `yaml:"grpc_upstreams"`
+	Observability     ObservabilityConfig     `yaml:"observability"`
+	Auth              AuthConfig              `yaml:"auth"`
+	Privacy           PrivacyConfig           `yaml:"privacy"`
 }
 
 type ServiceConfig struct {
@@ -62,6 +64,7 @@ type RedisConfig struct {
 }
 
 type CacheConfig struct {
+	Mode              string `yaml:"mode"`
 	LocalNumCounters  int64  `yaml:"local_num_counters"`
 	LocalMaxCostBytes int64  `yaml:"local_max_cost_bytes"`
 	LocalBufferItems  int64  `yaml:"local_buffer_items"`
@@ -71,6 +74,23 @@ type CacheConfig struct {
 	RebuildLockTTL    string `yaml:"rebuild_lock_ttl"`
 	RebuildWait       string `yaml:"rebuild_wait"`
 	RebuildPoll       string `yaml:"rebuild_poll"`
+}
+
+type PurchaseRateLimitConfig struct {
+	UserRate     int `yaml:"user_rate"`
+	UserBurst    int `yaml:"user_burst"`
+	ProgramRate  int `yaml:"program_rate"`
+	ProgramBurst int `yaml:"program_burst"`
+}
+
+type WorkerConfig struct {
+	Disabled               []string `yaml:"disabled"`
+	PollInterval           string   `yaml:"poll_interval"`
+	CreateBatchSize        int      `yaml:"create_batch_size"`
+	CancelBatchSize        int      `yaml:"cancel_batch_size"`
+	CancelDelay            string   `yaml:"cancel_delay"`
+	DelayVisibilityTimeout string   `yaml:"delay_visibility_timeout"`
+	FailBeforeAckCount     int      `yaml:"fail_before_ack_count"`
 }
 
 type KafkaConfig struct {
@@ -144,11 +164,17 @@ func (c *Config) ApplyDefaults() {
 	if c.HTTP.Addr == "" {
 		c.HTTP.Addr = ":8080"
 	}
+	if value := strings.TrimSpace(os.Getenv("TICKETHUB_HTTP_ADDR")); value != "" {
+		c.HTTP.Addr = value
+	}
 	if c.HTTP.Timeout == "" {
 		c.HTTP.Timeout = "5s"
 	}
 	if c.GRPC.Timeout == "" {
 		c.GRPC.Timeout = "5s"
+	}
+	if value := strings.TrimSpace(os.Getenv("TICKETHUB_GRPC_ADDR")); value != "" {
+		c.GRPC.Addr = value
 	}
 	if c.MySQL.MaxOpenConns == 0 {
 		c.MySQL.MaxOpenConns = 32
@@ -182,6 +208,33 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Cache.RebuildPoll == "" {
 		c.Cache.RebuildPoll = "25ms"
+	}
+	if c.PurchaseRateLimit.UserRate <= 0 {
+		c.PurchaseRateLimit.UserRate = 3
+	}
+	if c.PurchaseRateLimit.UserBurst <= 0 {
+		c.PurchaseRateLimit.UserBurst = 6
+	}
+	if c.PurchaseRateLimit.ProgramRate <= 0 {
+		c.PurchaseRateLimit.ProgramRate = 1000
+	}
+	if c.PurchaseRateLimit.ProgramBurst <= 0 {
+		c.PurchaseRateLimit.ProgramBurst = 1500
+	}
+	if c.Workers.PollInterval == "" {
+		c.Workers.PollInterval = "1s"
+	}
+	if c.Workers.CreateBatchSize <= 0 {
+		c.Workers.CreateBatchSize = 32
+	}
+	if c.Workers.CancelBatchSize <= 0 {
+		c.Workers.CancelBatchSize = 32
+	}
+	if c.Workers.CancelDelay == "" {
+		c.Workers.CancelDelay = "15m"
+	}
+	if c.Workers.DelayVisibilityTimeout == "" {
+		c.Workers.DelayVisibilityTimeout = "2m"
 	}
 	if c.Sharding.DatabasePrefix == "" {
 		c.Sharding.DatabasePrefix = "tickethub_order"
@@ -236,6 +289,9 @@ func (c *Config) ApplyDefaults() {
 	if c.Observability.LogLevel == "" {
 		c.Observability.LogLevel = "info"
 	}
+	if value := strings.TrimSpace(os.Getenv("TICKETHUB_METRICS_ADDR")); value != "" {
+		c.Observability.MetricsAddr = value
+	}
 	if value := strings.TrimSpace(os.Getenv("TICKETHUB_JWT_SECRET")); value != "" {
 		c.Auth.JWTSecret = value
 	}
@@ -257,6 +313,35 @@ func (c *Config) ApplyDefaults() {
 	if value := strings.TrimSpace(os.Getenv("TICKETHUB_PRIVACY_LOOKUP_KEY")); value != "" {
 		c.Privacy.LookupKey = value
 	}
+}
+
+func (c CacheConfig) ModeName() string {
+	mode := strings.ToLower(strings.TrimSpace(c.Mode))
+	if mode == "" {
+		return "multilevel"
+	}
+	return mode
+}
+
+func (c WorkerConfig) Enabled(name string) bool {
+	for _, disabled := range c.Disabled {
+		if strings.EqualFold(strings.TrimSpace(disabled), strings.TrimSpace(name)) {
+			return false
+		}
+	}
+	return true
+}
+
+func (c WorkerConfig) PollIntervalDuration() time.Duration {
+	return parseDuration(c.PollInterval, time.Second)
+}
+
+func (c WorkerConfig) CancelDelayDuration() time.Duration {
+	return parseDuration(c.CancelDelay, 15*time.Minute)
+}
+
+func (c WorkerConfig) DelayVisibilityDuration() time.Duration {
+	return parseDuration(c.DelayVisibilityTimeout, 2*time.Minute)
 }
 
 func (c CacheConfig) LocalTTLDuration() time.Duration {
@@ -309,6 +394,14 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.HTTP.Addr) == "" {
 		return fmt.Errorf("http.addr is required")
+	}
+	switch c.Cache.ModeName() {
+	case "mysql", "redis", "multilevel":
+	default:
+		return fmt.Errorf("cache.mode must be mysql, redis, or multilevel")
+	}
+	if c.Workers.FailBeforeAckCount > 0 && !strings.EqualFold(strings.TrimSpace(c.Service.Env), "load") {
+		return fmt.Errorf("workers.fail_before_ack_count is only allowed in load environment")
 	}
 	if (c.Service.Name == "gateway-bff" || c.Service.Name == "user-service") && strings.TrimSpace(c.Auth.JWTSecret) == "" {
 		return fmt.Errorf("auth.jwt_secret is required for %s", c.Service.Name)
