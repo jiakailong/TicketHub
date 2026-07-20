@@ -112,7 +112,7 @@ func buildHandlers(cfg config.Config) (orderhttp.Handler, ordergrpc.Server, orde
 		publisher = mq.NewKafkaProducer(cfg.Kafka.Brokers, cfg.Kafka.ClientID)
 		consumer = mq.NewKafkaConsumer(cfg.Kafka.Brokers, cfg.Kafka.GroupID)
 		redisClient := thredis.NewClient(cfg.Redis)
-		cancelQueue = delayqueue.NewRedisQueue(redisClient, cfg.Redis.KeyPrefix+":delayqueue")
+		cancelQueue = delayqueue.NewRedisQueue(redisClient, cfg.Redis.KeyPrefix+":delayqueue").WithVisibilityTimeout(cfg.Workers.DelayVisibilityDuration())
 	} else {
 		ordersRepo = memory.NewOrderRepository()
 		discards = memory.NewDiscardRepository()
@@ -142,10 +142,17 @@ func buildHandlers(cfg config.Config) (orderhttp.Handler, ordergrpc.Server, orde
 	}
 	reconciliation := orderapp.NewReconciliationService(reconciliations).WithInventory(usageRepo, programClient)
 	createConsumer := orderapp.NewCreateOrderConsumer(ordersRepo, discards, 5*time.Minute).
-		WithCancelDelayQueue(cancelQueue, 15*time.Minute).
+		WithCancelDelayQueue(cancelQueue, cfg.Workers.CancelDelayDuration()).
 		WithInventoryRollback(programClient)
 	cancelWorker := orderapp.NewCancelOrderWorker(cancelQueue, service)
-	runner := orderworker.NewRunner(consumer, cfg.Kafka.Topics["create_order"], createConsumer, cancelWorker)
+	runner := orderworker.NewRunner(consumer, cfg.Kafka.Topics["create_order"], createConsumer, cancelWorker).
+		WithSettings(
+			cfg.Workers.PollIntervalDuration(),
+			cfg.Workers.CreateBatchSize,
+			cfg.Workers.CancelBatchSize,
+			cfg.Workers.Enabled("create_order"),
+			cfg.Workers.Enabled("cancel_order"),
+		)
 	if mappingRefresher != nil {
 		runner = runner.WithShardMappingRefresher(mappingRefresher, 5*time.Second)
 	}

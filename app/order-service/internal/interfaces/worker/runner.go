@@ -21,6 +21,8 @@ type Runner struct {
 	cancelBatchSize  int
 	mappingRefresher ShardMappingRefresher
 	mappingInterval  time.Duration
+	createEnabled    bool
+	cancelEnabled    bool
 }
 
 type ShardMappingRefresher interface {
@@ -40,7 +42,24 @@ func NewRunner(events mq.Consumer, createTopic string, createOrders application.
 		createBatchSize: 32,
 		cancelBatchSize: 32,
 		mappingInterval: 5 * time.Second,
+		createEnabled:   true,
+		cancelEnabled:   true,
 	}
+}
+
+func (r Runner) WithSettings(pollInterval time.Duration, createBatchSize int, cancelBatchSize int, createEnabled bool, cancelEnabled bool) Runner {
+	if pollInterval > 0 {
+		r.pollInterval = pollInterval
+	}
+	if createBatchSize > 0 {
+		r.createBatchSize = createBatchSize
+	}
+	if cancelBatchSize > 0 {
+		r.cancelBatchSize = cancelBatchSize
+	}
+	r.createEnabled = createEnabled
+	r.cancelEnabled = cancelEnabled
+	return r
 }
 
 func (r Runner) WithShardMappingRefresher(refresher ShardMappingRefresher, interval time.Duration) Runner {
@@ -52,10 +71,12 @@ func (r Runner) WithShardMappingRefresher(refresher ShardMappingRefresher, inter
 }
 
 func (r Runner) Start(ctx context.Context) {
-	if r.events != nil {
+	if r.createEnabled && r.events != nil {
 		go r.consumeCreateOrders(ctx)
 	}
-	go r.pollCancelOrders(ctx)
+	if r.cancelEnabled {
+		go r.pollCancelOrders(ctx)
+	}
 	if r.mappingRefresher != nil {
 		go r.refreshShardMappings(ctx)
 	}
