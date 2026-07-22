@@ -2,6 +2,7 @@ import client from './client.js'
 
 export const userApi = {
   register: (payload) => client.post('/users/register', payload),
+  createRegisterCaptcha: (payload) => client.post('/users/register/captcha', payload),
   login: (payload) => client.post('/users/login', payload),
   detail: () => client.get('/users/detail'),
   ticketUsers: () => client.get('/users/ticket-users'),

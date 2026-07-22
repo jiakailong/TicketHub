@@ -13,15 +13,23 @@ import (
 )
 
 type Handler struct {
-	users application.UserCommandService
+	users     application.UserCommandService
+	clientIPs httpx.ClientIPResolver
 }
 
 func NewHandler(users application.UserCommandService) Handler {
-	return Handler{users: users}
+	resolver, _ := httpx.NewClientIPResolver(nil)
+	return Handler{users: users, clientIPs: resolver}
+}
+
+func (h Handler) WithClientIPResolver(resolver httpx.ClientIPResolver) Handler {
+	h.clientIPs = resolver
+	return h
 }
 
 func (h Handler) Register(server *khttp.Server) {
 	server.HandleFunc("/v1/users/register", h.register)
+	server.HandleFunc("/v1/users/register/captcha", h.createRegisterCaptcha)
 	server.HandleFunc("/v1/users/login", h.login)
 	server.HandleFunc("/v1/users/detail", h.getUser)
 	server.HandleFunc("/v1/users/ticket-users", h.ticketUsers)
@@ -33,16 +41,21 @@ func (h Handler) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Mobile   string `json:"mobile"`
-		Password string `json:"password"`
+		Mobile        string `json:"mobile"`
+		Password      string `json:"password"`
+		CaptchaID     string `json:"captcha_id"`
+		CaptchaAnswer string `json:"captcha_answer"`
 	}
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.WriteError(w, err)
 		return
 	}
 	created, err := h.users.Register(r.Context(), application.RegisterCommand{
-		Mobile:   req.Mobile,
-		Password: req.Password,
+		Mobile:        req.Mobile,
+		Password:      req.Password,
+		CaptchaID:     req.CaptchaID,
+		CaptchaAnswer: req.CaptchaAnswer,
+		ClientIP:      h.clientIPs.Resolve(r),
 	})
 	if err != nil {
 		httpx.WriteError(w, err)
@@ -52,6 +65,33 @@ func (h Handler) register(w http.ResponseWriter, r *http.Request) {
 		"id":               created.ID,
 		"mobile":           privacy.MaskMobile(created.Mobile),
 		"real_name_status": created.RealNameStatus,
+	})
+}
+
+func (h Handler) createRegisterCaptcha(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Mobile string `json:"mobile"`
+	}
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	challenge, err := h.users.CreateRegisterCaptcha(r.Context(), application.RegisterCaptchaCommand{
+		Mobile:   req.Mobile,
+		ClientIP: h.clientIPs.Resolve(r),
+	})
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteOK(w, map[string]any{
+		"captcha_id":         challenge.ID,
+		"image":              challenge.Image,
+		"expires_in_seconds": int(challenge.ExpiresIn.Seconds()),
 	})
 }
 

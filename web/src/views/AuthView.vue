@@ -1,7 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Lock, Phone, ArrowRight } from '@element-plus/icons-vue'
+import { Lock, Phone, ArrowRight, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { userApi } from '../api/index.js'
 import { useAuthStore } from '../stores/auth.js'
@@ -14,13 +14,35 @@ const auth = useAuthStore()
 const formRef = ref()
 const loading = ref(false)
 const isLogin = computed(() => props.mode === 'login')
-const form = reactive({ mobile: '', password: '', confirmPassword: '' })
+const form = reactive({ mobile: '', password: '', confirmPassword: '', captchaAnswer: '' })
+const captcha = reactive({ active: false, id: '', image: '', loading: false })
 
 const rules = computed(() => ({
   mobile: [{ required: true, message: '请输入手机号', trigger: 'blur' }, { pattern: /^1\d{10}$/, message: '请输入 11 位手机号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }, { min: 6, message: '密码至少 6 位', trigger: 'blur' }],
   confirmPassword: isLogin.value ? [] : [{ validator: (_, value, callback) => value === form.password ? callback() : callback(new Error('两次密码不一致')), trigger: 'blur' }],
+  captchaAnswer: !isLogin.value || !captcha.active ? [] : [{ required: true, message: '请输入图形验证码', trigger: 'blur' }],
 }))
+
+function clearCaptcha() {
+  captcha.active = false
+  captcha.id = ''
+  captcha.image = ''
+  form.captchaAnswer = ''
+}
+
+async function refreshCaptcha() {
+  captcha.loading = true
+  try {
+    const challenge = await userApi.createRegisterCaptcha({ mobile: form.mobile })
+    captcha.active = true
+    captcha.id = challenge.captcha_id
+    captcha.image = challenge.image
+    form.captchaAnswer = ''
+  } finally {
+    captcha.loading = false
+  }
+}
 
 async function submit() {
   await formRef.value.validate()
@@ -31,16 +53,34 @@ async function submit() {
       ElMessage.success('欢迎回来')
       router.replace(String(route.query.redirect || '/'))
     } else {
-      await userApi.register({ mobile: form.mobile, password: form.password })
+      await userApi.register({
+        mobile: form.mobile,
+        password: form.password,
+        ...(captcha.active ? { captcha_id: captcha.id, captcha_answer: form.captchaAnswer } : {}),
+      })
       ElMessage.success('注册成功，请登录')
+      clearCaptcha()
       router.replace({ name: 'login', query: { mobile: form.mobile } })
     }
+  } catch (error) {
+    if (!isLogin.value && error?.tickethubCode === 'CAPTCHA_REQUIRED') {
+      await refreshCaptcha()
+      return
+    }
+    if (!isLogin.value && error?.tickethubCode === 'CAPTCHA_INVALID') {
+      await refreshCaptcha()
+      return
+    }
+    throw error
   } finally {
     loading.value = false
   }
 }
 
 watch(() => route.query.mobile, (value) => { if (value) form.mobile = String(value) }, { immediate: true })
+watch(() => form.mobile, (value, previous) => {
+  if (captcha.active && value !== previous) clearCaptcha()
+})
 </script>
 
 <template>
@@ -55,6 +95,13 @@ watch(() => route.query.mobile, (value) => { if (value) form.mobile = String(val
           <el-form-item label="手机号" prop="mobile"><el-input v-model="form.mobile" :prefix-icon="Phone" autocomplete="tel" maxlength="11" placeholder="请输入手机号" /></el-form-item>
           <el-form-item label="密码" prop="password"><el-input v-model="form.password" :prefix-icon="Lock" type="password" show-password autocomplete="current-password" placeholder="至少 6 位" @keyup.enter="submit" /></el-form-item>
           <el-form-item v-if="!isLogin" label="确认密码" prop="confirmPassword"><el-input v-model="form.confirmPassword" :prefix-icon="Lock" type="password" show-password autocomplete="new-password" placeholder="再次输入密码" @keyup.enter="submit" /></el-form-item>
+          <el-form-item v-if="!isLogin && captcha.active" label="图形验证码" prop="captchaAnswer">
+            <div class="captcha-control">
+              <el-input v-model="form.captchaAnswer" autocomplete="off" maxlength="8" placeholder="请输入验证码" @keyup.enter="submit" />
+              <img class="captcha-image" :src="captcha.image" alt="图形验证码" />
+              <el-tooltip content="刷新验证码"><el-button circle :icon="RefreshRight" native-type="button" :loading="captcha.loading" @click="refreshCaptcha" /></el-tooltip>
+            </div>
+          </el-form-item>
           <el-button class="submit-button" type="primary" native-type="submit" :loading="loading">{{ isLogin ? '登录' : '注册' }}<el-icon class="el-icon--right"><ArrowRight /></el-icon></el-button>
         </el-form>
         <p class="switch-auth">{{ isLogin ? '还没有账户？' : '已经有账户？' }} <RouterLink :to="isLogin ? '/register' : '/login'">{{ isLogin ? '立即注册' : '返回登录' }}</RouterLink></p>
@@ -78,5 +125,7 @@ watch(() => route.query.mobile, (value) => { if (value) form.mobile = String(val
 .submit-button { width: 100%; margin-top: 6px; }
 .switch-auth { margin: 24px 0 0; color: var(--muted); text-align: center; }
 .switch-auth a { color: var(--accent); font-weight: 700; }
+.captcha-control { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 112px 40px; gap: 8px; align-items: center; }
+.captcha-image { width: 112px; height: 40px; border: 1px solid var(--line); object-fit: cover; }
 @media (max-width: 760px) { .auth-page { min-height: calc(100vh - 60px); display: block; } .auth-image { min-height: 210px; } .auth-copy { left: 24px; right: 24px; bottom: 28px; } .auth-copy h1 { margin-bottom: 0; font-size: 27px; } .auth-copy span, .auth-copy p { display: none; } .auth-form-wrap { padding: 34px 20px 52px; } .auth-form h2 { font-size: 25px; } }
 </style>

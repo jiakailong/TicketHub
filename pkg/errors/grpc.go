@@ -70,8 +70,10 @@ func grpcCode(code Code) codes.Code {
 		return codes.PermissionDenied
 	case CodeNotFound:
 		return codes.NotFound
-	case CodeConflict, CodeSeatUnavailable, CodeOrderStateConflict, CodeDuplicateSubmission:
+	case CodeConflict, CodeSeatUnavailable, CodeOrderStateConflict, CodeDuplicateSubmission, CodeCaptchaRequired:
 		return codes.FailedPrecondition
+	case CodeCaptchaInvalid:
+		return codes.InvalidArgument
 	case CodeInventoryNotEnough:
 		return codes.ResourceExhausted
 	case CodeTooManyRequests:
@@ -108,7 +110,8 @@ func isKnownCode(code Code) bool {
 	switch code {
 	case CodeOK, CodeInvalidArgument, CodeUnauthenticated, CodeForbidden, CodeNotFound,
 		CodeConflict, CodeTooManyRequests, CodeInventoryNotEnough, CodeSeatUnavailable,
-		CodeOrderStateConflict, CodeDuplicateSubmission, CodeInfrastructure, CodeInternal:
+		CodeOrderStateConflict, CodeDuplicateSubmission, CodeCaptchaRequired, CodeCaptchaInvalid,
+		CodeInfrastructure, CodeInternal:
 		return true
 	default:
 		return false

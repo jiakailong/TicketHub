@@ -19,17 +19,19 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	UserService_Register_FullMethodName        = "/tickethub.user.v1.UserService/Register"
-	UserService_Login_FullMethodName           = "/tickethub.user.v1.UserService/Login"
-	UserService_GetUser_FullMethodName         = "/tickethub.user.v1.UserService/GetUser"
-	UserService_ListTicketUsers_FullMethodName = "/tickethub.user.v1.UserService/ListTicketUsers"
-	UserService_AddTicketUser_FullMethodName   = "/tickethub.user.v1.UserService/AddTicketUser"
+	UserService_CreateRegisterCaptcha_FullMethodName = "/tickethub.user.v1.UserService/CreateRegisterCaptcha"
+	UserService_Register_FullMethodName              = "/tickethub.user.v1.UserService/Register"
+	UserService_Login_FullMethodName                 = "/tickethub.user.v1.UserService/Login"
+	UserService_GetUser_FullMethodName               = "/tickethub.user.v1.UserService/GetUser"
+	UserService_ListTicketUsers_FullMethodName       = "/tickethub.user.v1.UserService/ListTicketUsers"
+	UserService_AddTicketUser_FullMethodName         = "/tickethub.user.v1.UserService/AddTicketUser"
 )
 
 // UserServiceClient is the client API for UserService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type UserServiceClient interface {
+	CreateRegisterCaptcha(ctx context.Context, in *RegisterCaptchaRequest, opts ...grpc.CallOption) (*RegisterCaptchaReply, error)
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*UserReply, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginReply, error)
 	GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*UserReply, error)
@@ -43,6 +45,15 @@ type userServiceClient struct {
 
 func NewUserServiceClient(cc grpc.ClientConnInterface) UserServiceClient {
 	return &userServiceClient{cc}
+}
+
+func (c *userServiceClient) CreateRegisterCaptcha(ctx context.Context, in *RegisterCaptchaRequest, opts ...grpc.CallOption) (*RegisterCaptchaReply, error) {
+	out := new(RegisterCaptchaReply)
+	err := c.cc.Invoke(ctx, UserService_CreateRegisterCaptcha_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *userServiceClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*UserReply, error) {
@@ -94,6 +105,7 @@ func (c *userServiceClient) AddTicketUser(ctx context.Context, in *AddTicketUser
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility
 type UserServiceServer interface {
+	CreateRegisterCaptcha(context.Context, *RegisterCaptchaRequest) (*RegisterCaptchaReply, error)
 	Register(context.Context, *RegisterRequest) (*UserReply, error)
 	Login(context.Context, *LoginRequest) (*LoginReply, error)
 	GetUser(context.Context, *GetUserRequest) (*UserReply, error)
@@ -106,6 +118,9 @@ type UserServiceServer interface {
 type UnimplementedUserServiceServer struct {
 }
 
+func (UnimplementedUserServiceServer) CreateRegisterCaptcha(context.Context, *RegisterCaptchaRequest) (*RegisterCaptchaReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateRegisterCaptcha not implemented")
+}
 func (UnimplementedUserServiceServer) Register(context.Context, *RegisterRequest) (*UserReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Register not implemented")
 }
@@ -132,6 +147,24 @@ type UnsafeUserServiceServer interface {
 
 func RegisterUserServiceServer(s grpc.ServiceRegistrar, srv UserServiceServer) {
 	s.RegisterService(&UserService_ServiceDesc, srv)
+}
+
+func _UserService_CreateRegisterCaptcha_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterCaptchaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).CreateRegisterCaptcha(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_CreateRegisterCaptcha_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).CreateRegisterCaptcha(ctx, req.(*RegisterCaptchaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _UserService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -231,6 +264,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "tickethub.user.v1.UserService",
 	HandlerType: (*UserServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateRegisterCaptcha",
+			Handler:    _UserService_CreateRegisterCaptcha_Handler,
+		},
 		{
 			MethodName: "Register",
 			Handler:    _UserService_Register_Handler,

@@ -26,6 +26,48 @@ async function authenticate(page) {
 }
 
 test.describe('TicketHub storefront', () => {
+  test('registration requests and completes a captcha challenge', async ({ page }) => {
+    let registerAttempts = 0
+    await page.route('**/api/users/register', async (route) => {
+      registerAttempts += 1
+      if (registerAttempts === 1) {
+        await route.fulfill({
+          status: 428,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'CAPTCHA_REQUIRED', message: '请完成验证码验证' }),
+        })
+        return
+      }
+      const body = route.request().postDataJSON()
+      expect(body.captcha_id).toBe('captcha-1')
+      expect(body.captcha_answer).toBe('24680')
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'OK', data: { id: '1' } }),
+      })
+    })
+    await page.route('**/api/users/register/captcha', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'OK', data: { captcha_id: 'captcha-1', image: 'data:image/png;base64,iVBORw0KGgo=', expires_in_seconds: 120 } }),
+      })
+    })
+
+    await page.goto('/register')
+    await page.getByPlaceholder('请输入手机号').fill('13800000000')
+    await page.getByPlaceholder('至少 6 位').fill('secret')
+    await page.getByPlaceholder('再次输入密码').fill('secret')
+    await page.locator('.auth-form .submit-button').click()
+
+    await expect(page.getByPlaceholder('请输入验证码')).toBeVisible()
+    await page.getByPlaceholder('请输入验证码').fill('24680')
+    await page.locator('.auth-form .submit-button').click()
+    await expect(page.getByRole('heading', { name: '登录 TicketHub' })).toBeVisible()
+    expect(registerAttempts).toBe(2)
+  })
+
   test('home, detail and login pages render cleanly', async ({ page }, testInfo) => {
     const consoleErrors = []
     page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()) })

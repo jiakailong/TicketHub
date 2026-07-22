@@ -5,6 +5,7 @@ package tickethub.user.v1;
 option go_package = "tickethub/api/proto/user/v1;userv1";
 
 service UserService {
+  rpc CreateRegisterCaptcha(RegisterCaptchaRequest) returns (RegisterCaptchaReply);
   rpc Register(RegisterRequest) returns (UserReply);
   rpc Login(LoginRequest) returns (LoginReply);
   rpc GetUser(GetUserRequest) returns (UserReply);
@@ -15,6 +16,22 @@ service UserService {
 message RegisterRequest {
   string mobile = 1;
   string password = 2;
+  string captcha_id = 3;
+  string captcha_answer = 4;
+  // client_ip is populated only by a trusted gateway-bff.
+  string client_ip = 5;
+}
+
+message RegisterCaptchaRequest {
+  string mobile = 1;
+  // client_ip is populated only by a trusted gateway-bff.
+  string client_ip = 2;
+}
+
+message RegisterCaptchaReply {
+  string captcha_id = 1;
+  string image = 2;
+  int32 expires_in_seconds = 3;
 }
 
 message LoginRequest {

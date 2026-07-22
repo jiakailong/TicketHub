@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -11,22 +13,24 @@ import (
 )
 
 type Config struct {
-	Service           ServiceConfig           `yaml:"service"`
-	HTTP              EndpointConfig          `yaml:"http"`
-	GRPC              EndpointConfig          `yaml:"grpc"`
-	MySQL             MySQLConfig             `yaml:"mysql"`
-	Sharding          ShardingConfig          `yaml:"sharding"`
-	Redis             RedisConfig             `yaml:"redis"`
-	Cache             CacheConfig             `yaml:"cache"`
-	PurchaseRateLimit PurchaseRateLimitConfig `yaml:"purchase_rate_limit"`
-	Workers           WorkerConfig            `yaml:"workers"`
-	Kafka             KafkaConfig             `yaml:"kafka"`
-	Elasticsearch     ElasticsearchConfig     `yaml:"elasticsearch"`
-	Upstreams         map[string]string       `yaml:"upstreams"`
-	GRPCUpstreams     map[string]string       `yaml:"grpc_upstreams"`
-	Observability     ObservabilityConfig     `yaml:"observability"`
-	Auth              AuthConfig              `yaml:"auth"`
-	Privacy           PrivacyConfig           `yaml:"privacy"`
+	Service           ServiceConfig                `yaml:"service"`
+	HTTP              EndpointConfig               `yaml:"http"`
+	GRPC              EndpointConfig               `yaml:"grpc"`
+	MySQL             MySQLConfig                  `yaml:"mysql"`
+	Sharding          ShardingConfig               `yaml:"sharding"`
+	Redis             RedisConfig                  `yaml:"redis"`
+	Cache             CacheConfig                  `yaml:"cache"`
+	PurchaseRateLimit PurchaseRateLimitConfig      `yaml:"purchase_rate_limit"`
+	Workers           WorkerConfig                 `yaml:"workers"`
+	Kafka             KafkaConfig                  `yaml:"kafka"`
+	Elasticsearch     ElasticsearchConfig          `yaml:"elasticsearch"`
+	Upstreams         map[string]string            `yaml:"upstreams"`
+	GRPCUpstreams     map[string]string            `yaml:"grpc_upstreams"`
+	Observability     ObservabilityConfig          `yaml:"observability"`
+	Auth              AuthConfig                   `yaml:"auth"`
+	Privacy           PrivacyConfig                `yaml:"privacy"`
+	Security          SecurityConfig               `yaml:"security"`
+	Registration      RegistrationProtectionConfig `yaml:"registration_protection"`
 }
 
 type ServiceConfig struct {
@@ -123,6 +127,25 @@ type PrivacyConfig struct {
 	ActiveKeyVersion string            `yaml:"active_key_version"`
 	EncryptionKeys   map[string]string `yaml:"encryption_keys"`
 	LookupKey        string            `yaml:"lookup_key"`
+}
+
+type SecurityConfig struct {
+	TrustedProxyCIDRs []string `yaml:"trusted_proxy_cidrs"`
+}
+
+type RegistrationProtectionConfig struct {
+	Enabled                 bool   `yaml:"enabled"`
+	CaptchaTTL              string `yaml:"captcha_ttl"`
+	CaptchaMaxAttempts      int    `yaml:"captcha_max_attempts"`
+	CaptchaTriggerPerSecond int    `yaml:"captcha_trigger_per_second"`
+	IPRequestsPerMinute     int    `yaml:"ip_requests_per_minute"`
+	MobileRequestsPerMinute int    `yaml:"mobile_requests_per_minute"`
+	CaptchaIssuesPerMinute  int    `yaml:"captcha_issues_per_minute"`
+	BloomVersion            string `yaml:"bloom_version"`
+	BloomBits               uint64 `yaml:"bloom_bits"`
+	BloomHashFunctions      uint32 `yaml:"bloom_hash_functions"`
+	BloomBootstrapBatchSize int    `yaml:"bloom_bootstrap_batch_size"`
+	HMACSecret              string `yaml:"hmac_secret"`
 }
 
 func Load(path string) (Config, error) {
@@ -313,6 +336,39 @@ func (c *Config) ApplyDefaults() {
 	if value := strings.TrimSpace(os.Getenv("TICKETHUB_PRIVACY_LOOKUP_KEY")); value != "" {
 		c.Privacy.LookupKey = value
 	}
+	if c.Registration.CaptchaTTL == "" {
+		c.Registration.CaptchaTTL = "2m"
+	}
+	if c.Registration.CaptchaMaxAttempts <= 0 {
+		c.Registration.CaptchaMaxAttempts = 5
+	}
+	if c.Registration.CaptchaTriggerPerSecond <= 0 {
+		c.Registration.CaptchaTriggerPerSecond = 10
+	}
+	if c.Registration.IPRequestsPerMinute <= 0 {
+		c.Registration.IPRequestsPerMinute = 60
+	}
+	if c.Registration.MobileRequestsPerMinute <= 0 {
+		c.Registration.MobileRequestsPerMinute = 5
+	}
+	if c.Registration.CaptchaIssuesPerMinute <= 0 {
+		c.Registration.CaptchaIssuesPerMinute = 20
+	}
+	if c.Registration.BloomVersion == "" {
+		c.Registration.BloomVersion = "v1"
+	}
+	if c.Registration.BloomBits == 0 {
+		c.Registration.BloomBits = 14_377_588
+	}
+	if c.Registration.BloomHashFunctions == 0 {
+		c.Registration.BloomHashFunctions = 10
+	}
+	if c.Registration.BloomBootstrapBatchSize <= 0 {
+		c.Registration.BloomBootstrapBatchSize = 1_000
+	}
+	if value := strings.TrimSpace(os.Getenv("TICKETHUB_REGISTER_PROTECTION_HMAC_SECRET")); value != "" {
+		c.Registration.HMACSecret = value
+	}
 }
 
 func (c CacheConfig) ModeName() string {
@@ -362,6 +418,10 @@ func (c CacheConfig) RebuildWaitDuration() time.Duration {
 
 func (c CacheConfig) RebuildPollDuration() time.Duration {
 	return parseDuration(c.RebuildPoll, 25*time.Millisecond)
+}
+
+func (c RegistrationProtectionConfig) CaptchaTTLDuration() time.Duration {
+	return parseDuration(c.CaptchaTTL, 2*time.Minute)
 }
 
 func parseDuration(value string, fallback time.Duration) time.Duration {
@@ -424,6 +484,25 @@ func (c Config) Validate() error {
 		}
 		if strings.TrimSpace(c.Privacy.LookupKey) == "" {
 			return fmt.Errorf("privacy.lookup_key is required for user-service infrastructure mode")
+		}
+		if c.Registration.Enabled {
+			secret, err := base64.StdEncoding.DecodeString(strings.TrimSpace(c.Registration.HMACSecret))
+			if err != nil || len(secret) < 32 {
+				return fmt.Errorf("registration_protection.hmac_secret must be a base64 key with at least 32 bytes")
+			}
+		}
+	}
+	for _, raw := range c.Security.TrustedProxyCIDRs {
+		if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+			return fmt.Errorf("security.trusted_proxy_cidrs contains invalid CIDR %q", raw)
+		}
+	}
+	if c.Registration.Enabled {
+		if c.Registration.CaptchaTTLDuration() <= 0 || c.Registration.CaptchaMaxAttempts <= 0 ||
+			c.Registration.CaptchaTriggerPerSecond <= 0 || c.Registration.IPRequestsPerMinute <= 0 ||
+			c.Registration.MobileRequestsPerMinute <= 0 || c.Registration.CaptchaIssuesPerMinute <= 0 ||
+			c.Registration.BloomBits == 0 || c.Registration.BloomHashFunctions == 0 || c.Registration.BloomBootstrapBatchSize <= 0 {
+			return fmt.Errorf("registration_protection values must be positive when enabled")
 		}
 	}
 	return nil

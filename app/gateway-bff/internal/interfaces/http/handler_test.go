@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	userv1 "tickethub/api/proto/user/v1"
 	"tickethub/pkg/auth"
+	"tickethub/pkg/httpx"
 )
 
 func TestAuthProxyRejectsMissingToken(t *testing.T) {
@@ -81,7 +82,8 @@ func TestUserRegisterUsesGRPCWhenConfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := grpc.NewServer()
-	userv1.RegisterUserServiceServer(server, fakeUserService{})
+	fake := &fakeUserService{}
+	userv1.RegisterUserServiceServer(server, fake)
 	go func() {
 		_ = server.Serve(listener)
 	}()
@@ -105,12 +107,58 @@ func TestUserRegisterUsesGRPCWhenConfigured(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"id":"99"`) {
 		t.Fatalf("expected browser-safe string id, got %s", rec.Body.String())
 	}
+	if fake.lastRegister.GetClientIp() != "192.0.2.1" {
+		t.Fatalf("client ip = %q", fake.lastRegister.GetClientIp())
+	}
+}
+
+func TestUserRegisterCaptchaForwardsTrustedClientIP(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := grpc.NewServer()
+	fake := &fakeUserService{}
+	userv1.RegisterUserServiceServer(server, fake)
+	go func() { _ = server.Serve(listener) }()
+	defer server.Stop()
+
+	handler, err := NewHandlerWithGRPC(nil, map[string]string{"user-service": listener.Addr().String()}, auth.NewTokenManager("secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := httpx.NewClientIPResolver([]string{"10.0.0.0/8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler = handler.WithClientIPResolver(resolver)
+	req := httptest.NewRequest(http.MethodPost, "/api/users/register/captcha", bytes.NewBufferString(`{"mobile":"13800000000"}`))
+	req.RemoteAddr = "10.0.0.2:8080"
+	req.Header.Set("X-Forwarded-For", "203.0.113.9, 198.51.100.20")
+	rec := httptest.NewRecorder()
+
+	handler.userRegisterCaptcha(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.lastCaptcha.GetMobile() != "13800000000" || fake.lastCaptcha.GetClientIp() != "198.51.100.20" {
+		t.Fatalf("captcha request = %+v", fake.lastCaptcha)
+	}
 }
 
 type fakeUserService struct {
 	userv1.UnimplementedUserServiceServer
+	lastRegister *userv1.RegisterRequest
+	lastCaptcha  *userv1.RegisterCaptchaRequest
 }
 
-func (fakeUserService) Register(ctx context.Context, req *userv1.RegisterRequest) (*userv1.UserReply, error) {
+func (f *fakeUserService) Register(ctx context.Context, req *userv1.RegisterRequest) (*userv1.UserReply, error) {
+	f.lastRegister = req
 	return &userv1.UserReply{UserId: 99, Mobile: req.GetMobile(), RealNameStatus: "unverified"}, nil
+}
+
+func (f *fakeUserService) CreateRegisterCaptcha(ctx context.Context, req *userv1.RegisterCaptchaRequest) (*userv1.RegisterCaptchaReply, error) {
+	f.lastCaptcha = req
+	return &userv1.RegisterCaptchaReply{CaptchaId: "captcha", Image: "data:image/png;base64,test", ExpiresInSeconds: 120}, nil
 }

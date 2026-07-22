@@ -19,13 +19,31 @@ func NewServer(users application.UserCommandService) Server {
 
 func (s Server) Register(ctx context.Context, req *userv1.RegisterRequest) (*userv1.UserReply, error) {
 	created, err := s.users.Register(ctx, application.RegisterCommand{
-		Mobile:   req.GetMobile(),
-		Password: req.GetPassword(),
+		Mobile:        req.GetMobile(),
+		Password:      req.GetPassword(),
+		ClientIP:      req.GetClientIp(),
+		CaptchaID:     req.GetCaptchaId(),
+		CaptchaAnswer: req.GetCaptchaAnswer(),
 	})
 	if err != nil {
 		return nil, err
 	}
 	return userReply(created.ID, created.Mobile, string(created.RealNameStatus)), nil
+}
+
+func (s Server) CreateRegisterCaptcha(ctx context.Context, req *userv1.RegisterCaptchaRequest) (*userv1.RegisterCaptchaReply, error) {
+	challenge, err := s.users.CreateRegisterCaptcha(ctx, application.RegisterCaptchaCommand{
+		Mobile:   req.GetMobile(),
+		ClientIP: req.GetClientIp(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &userv1.RegisterCaptchaReply{
+		CaptchaId:        challenge.ID,
+		Image:            challenge.Image,
+		ExpiresInSeconds: int32(challenge.ExpiresIn.Seconds()),
+	}, nil
 }
 
 func (s Server) Login(ctx context.Context, req *userv1.LoginRequest) (*userv1.LoginReply, error) {

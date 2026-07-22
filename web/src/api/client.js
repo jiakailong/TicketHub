@@ -20,6 +20,7 @@ client.interceptors.response.use(
   },
   (error) => {
     const status = error.response?.status
+    error.tickethubCode = error.response?.data?.code
     const message = status === 401
       ? '登录状态已失效，请重新登录'
       : error.response?.data?.message || error.message || '网络开小差了，请稍后重试'

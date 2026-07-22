@@ -6,9 +6,49 @@ paths:
   /api/users/register:
     post:
       summary: Register through gateway-bff.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mobile, password]
+              properties:
+                mobile:
+                  type: string
+                password:
+                  type: string
+                captcha_id:
+                  type: string
+                captcha_answer:
+                  type: string
       responses:
         "200":
           description: Registered user returned with a masked mobile number.
+        "400":
+          description: Captcha is invalid, expired, or incomplete.
+        "428":
+          description: A captcha challenge is required before registration can continue.
+        "429":
+          description: Registration request rate exceeded.
+  /api/users/register/captcha:
+    post:
+      summary: Issue a one-time registration captcha after server-side rate checks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mobile]
+              properties:
+                mobile:
+                  type: string
+      responses:
+        "200":
+          description: Captcha id, Base64 PNG image, and expiry returned.
+        "429":
+          description: Captcha issuance rate exceeded.
   /api/users/login:
     post:
       summary: Login through gateway-bff and return an access token.
@@ -282,6 +322,20 @@ paths:
       responses:
         "200":
           description: Registered user returned.
+        "400":
+          description: Captcha is invalid, expired, or incomplete.
+        "428":
+          description: A captcha challenge is required before registration can continue.
+        "429":
+          description: Registration request rate exceeded.
+  /v1/users/register/captcha:
+    post:
+      summary: Issue a one-time registration captcha.
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Captcha id, Base64 PNG image, and expiry returned.
   /v1/program/orders:
     post:
       summary: Create a ticket order through the flash-sale path.

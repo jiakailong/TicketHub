@@ -26,3 +26,20 @@ privacy:
   active_key_version: ${TICKETHUB_PRIVACY_ACTIVE_KEY_VERSION}
   encryption_keys: {}
   lookup_key: ${TICKETHUB_PRIVACY_LOOKUP_KEY}
+security:
+  trusted_proxy_cidrs:
+    - 127.0.0.1/32
+    - 172.16.0.0/12
+registration_protection:
+  enabled: true
+  captcha_ttl: 2m
+  captcha_max_attempts: 5
+  captcha_trigger_per_second: 10
+  ip_requests_per_minute: 60
+  mobile_requests_per_minute: 5
+  captcha_issues_per_minute: 20
+  bloom_version: v1
+  bloom_bits: 14377588
+  bloom_hash_functions: 10
+  bloom_bootstrap_batch_size: 1000
+  hmac_secret: ${TICKETHUB_REGISTER_PROTECTION_HMAC_SECRET}

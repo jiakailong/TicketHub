@@ -39,3 +39,8 @@ observability:
   log_level: info
 auth:
   jwt_secret: ${TICKETHUB_JWT_SECRET}
+security:
+  trusted_proxy_cidrs:
+    - 127.0.0.1/32
+    # Docker Desktop forwards APISIX traffic from its bridge address.
+    - 172.16.0.0/12

@@ -11,3 +11,12 @@ func TestCodeOf(t *testing.T) {
 		t.Fatalf("HTTPStatus() = %d", status)
 	}
 }
+
+func TestCaptchaErrorHTTPStatuses(t *testing.T) {
+	if got := HTTPStatus(CodeCaptchaRequired); got != 428 {
+		t.Fatalf("captcha required status = %d", got)
+	}
+	if got := HTTPStatus(CodeCaptchaInvalid); got != 400 {
+		t.Fatalf("captcha invalid status = %d", got)
+	}
+}

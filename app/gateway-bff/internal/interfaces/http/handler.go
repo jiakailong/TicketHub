@@ -30,6 +30,7 @@ type Handler struct {
 	upstreams map[string]string
 	grpc      *GRPCClients
 	tokens    auth.TokenManager
+	clientIPs httpx.ClientIPResolver
 }
 
 func NewHandler(upstreams map[string]string, tokens auth.TokenManager) Handler {
@@ -51,12 +52,19 @@ func NewHandlerWithGRPC(upstreams map[string]string, grpcUpstreams map[string]st
 	if err != nil {
 		return Handler{}, err
 	}
+	resolver, _ := httpx.NewClientIPResolver(nil)
 	return Handler{
 		client:    &http.Client{Timeout: 5 * time.Second},
 		upstreams: copied,
 		grpc:      grpcClients,
 		tokens:    tokens,
+		clientIPs: resolver,
 	}, nil
+}
+
+func (h Handler) WithClientIPResolver(resolver httpx.ClientIPResolver) Handler {
+	h.clientIPs = resolver
+	return h
 }
 
 type GRPCClients struct {
@@ -133,6 +141,7 @@ func NewGRPCClients(upstreams map[string]string) (*GRPCClients, error) {
 
 func (h Handler) Register(server *khttp.Server) {
 	server.HandleFunc("/api/users/register", h.userRegister)
+	server.HandleFunc("/api/users/register/captcha", h.userRegisterCaptcha)
 	server.HandleFunc("/api/users/login", h.userLogin)
 	server.HandleFunc("/api/users/detail", h.userDetail)
 	server.HandleFunc("/api/users/ticket-users", h.ticketUsers)
@@ -169,14 +178,22 @@ func (h Handler) userRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Mobile   string `json:"mobile"`
-		Password string `json:"password"`
+		Mobile        string `json:"mobile"`
+		Password      string `json:"password"`
+		CaptchaID     string `json:"captcha_id"`
+		CaptchaAnswer string `json:"captcha_answer"`
 	}
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.WriteError(w, err)
 		return
 	}
-	reply, err := h.grpc.user.Register(r.Context(), &userv1.RegisterRequest{Mobile: req.Mobile, Password: req.Password})
+	reply, err := h.grpc.user.Register(r.Context(), &userv1.RegisterRequest{
+		Mobile:        req.Mobile,
+		Password:      req.Password,
+		CaptchaId:     req.CaptchaID,
+		CaptchaAnswer: req.CaptchaAnswer,
+		ClientIp:      h.clientIPs.Resolve(r),
+	})
 	if err != nil {
 		httpx.WriteError(w, err)
 		return
@@ -185,6 +202,37 @@ func (h Handler) userRegister(w http.ResponseWriter, r *http.Request) {
 		"id":               strconv.FormatInt(reply.GetUserId(), 10),
 		"mobile":           privacy.MaskMobile(reply.GetMobile()),
 		"real_name_status": reply.GetRealNameStatus(),
+	})
+}
+
+func (h Handler) userRegisterCaptcha(w http.ResponseWriter, r *http.Request) {
+	if h.grpc == nil || h.grpc.user == nil {
+		h.publicProxy("user-service", "/v1/users/register/captcha")(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Mobile string `json:"mobile"`
+	}
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	reply, err := h.grpc.user.CreateRegisterCaptcha(r.Context(), &userv1.RegisterCaptchaRequest{
+		Mobile:   req.Mobile,
+		ClientIp: h.clientIPs.Resolve(r),
+	})
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteOK(w, map[string]any{
+		"captcha_id":         reply.GetCaptchaId(),
+		"image":              reply.GetImage(),
+		"expires_in_seconds": reply.GetExpiresInSeconds(),
 	})
 }
 

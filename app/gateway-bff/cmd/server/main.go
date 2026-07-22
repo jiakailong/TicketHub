@@ -11,6 +11,7 @@ import (
 	"tickethub/pkg/auth"
 	"tickethub/pkg/bootstrap"
 	"tickethub/pkg/config"
+	"tickethub/pkg/httpx"
 )
 
 func main() {
@@ -25,6 +26,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	clientIPs, err := httpx.NewClientIPResolver(cfg.Security.TrustedProxyCIDRs)
+	if err != nil {
+		log.Fatal(err)
+	}
+	handler = handler.WithClientIPResolver(clientIPs)
 	if err := bootstrap.RunHTTP(cfg, func(server *khttp.Server) {
 		registerHTTP(server)
 		handler.Register(server)

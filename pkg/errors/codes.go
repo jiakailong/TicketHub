@@ -14,6 +14,8 @@ const (
 	CodeSeatUnavailable     Code = "SEAT_UNAVAILABLE"
 	CodeOrderStateConflict  Code = "ORDER_STATE_CONFLICT"
 	CodeDuplicateSubmission Code = "DUPLICATE_SUBMISSION"
+	CodeCaptchaRequired     Code = "CAPTCHA_REQUIRED"
+	CodeCaptchaInvalid      Code = "CAPTCHA_INVALID"
 	CodeInfrastructure      Code = "INFRASTRUCTURE_ERROR"
 	CodeInternal            Code = "INTERNAL"
 )

@@ -16,6 +16,10 @@ func HTTPStatus(code Code) int {
 		return 409
 	case CodeInventoryNotEnough:
 		return 422
+	case CodeCaptchaRequired:
+		return 428
+	case CodeCaptchaInvalid:
+		return 400
 	case CodeTooManyRequests:
 		return 429
 	case CodeInfrastructure:
@@ -35,6 +39,10 @@ func PublicMessage(code Code) string {
 		return "订单状态冲突"
 	case CodeDuplicateSubmission:
 		return "重复提交"
+	case CodeCaptchaRequired:
+		return "请完成验证码验证"
+	case CodeCaptchaInvalid:
+		return "验证码无效或已过期"
 	default:
 		return string(code)
 	}

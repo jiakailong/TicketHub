@@ -20,8 +20,11 @@ type PasswordHasher interface {
 }
 
 type RegisterCommand struct {
-	Mobile   string
-	Password string
+	Mobile        string
+	Password      string
+	ClientIP      string
+	CaptchaID     string
+	CaptchaAnswer string
 }
 
 type LoginCommand struct {
@@ -42,22 +45,31 @@ type LoginResult struct {
 }
 
 type UserCommandService struct {
-	ids          IDGenerator
-	users        user.Repository
-	ticketUsers  user.TicketUserRepository
-	hasher       PasswordHasher
-	tokens       *auth.TokenManager
-	nowFunc      func() time.Time
-	adminMobiles map[string]struct{}
+	ids               IDGenerator
+	users             user.Repository
+	ticketUsers       user.TicketUserRepository
+	hasher            PasswordHasher
+	tokens            *auth.TokenManager
+	nowFunc           func() time.Time
+	adminMobiles      map[string]struct{}
+	registrationGuard RegistrationGuard
 }
 
 func NewUserCommandService(ids IDGenerator, users user.Repository, hasher PasswordHasher) UserCommandService {
 	return UserCommandService{
-		ids:     ids,
-		users:   users,
-		hasher:  hasher,
-		nowFunc: time.Now,
+		ids:               ids,
+		users:             users,
+		hasher:            hasher,
+		nowFunc:           time.Now,
+		registrationGuard: NewNoopRegistrationGuard(),
 	}
+}
+
+func (s UserCommandService) WithRegistrationGuard(guard RegistrationGuard) UserCommandService {
+	if guard != nil {
+		s.registrationGuard = guard
+	}
+	return s
 }
 
 func (s UserCommandService) WithAdminMobiles(mobiles []string) UserCommandService {
@@ -85,10 +97,24 @@ func (s UserCommandService) Register(ctx context.Context, cmd RegisterCommand) (
 	if mobile == "" || strings.TrimSpace(cmd.Password) == "" {
 		return user.User{}, therrors.New(therrors.CodeInvalidArgument, "mobile and password are required")
 	}
-	if _, err := s.users.FindByMobile(ctx, mobile); err == nil {
-		return user.User{}, therrors.New(therrors.CodeConflict, "mobile already registered")
-	} else if !therrors.IsCode(err, therrors.CodeNotFound) {
+	if err := s.registrationGuard.Check(ctx, RegistrationAttempt{
+		Mobile:        mobile,
+		ClientIP:      strings.TrimSpace(cmd.ClientIP),
+		CaptchaID:     strings.TrimSpace(cmd.CaptchaID),
+		CaptchaAnswer: strings.TrimSpace(cmd.CaptchaAnswer),
+	}); err != nil {
 		return user.User{}, err
+	}
+	lookupState, lookupErr := s.registrationGuard.LookupMobile(ctx, mobile)
+	if lookupErr != nil {
+		lookupState = MobileLookupUnknown
+	}
+	if lookupState != MobileLookupAbsent {
+		if _, err := s.users.FindByMobile(ctx, mobile); err == nil {
+			return user.User{}, therrors.New(therrors.CodeConflict, "mobile already registered")
+		} else if !therrors.IsCode(err, therrors.CodeNotFound) {
+			return user.User{}, err
+		}
 	}
 	id, err := s.ids.NextID()
 	if err != nil {
@@ -100,9 +126,24 @@ func (s UserCommandService) Register(ctx context.Context, cmd RegisterCommand) (
 	}
 	registered := user.NewUser(id, mobile, hash, s.nowFunc())
 	if err := s.users.Save(ctx, registered); err != nil {
+		if therrors.IsCode(err, therrors.CodeConflict) {
+			_ = s.registrationGuard.MarkRegistered(ctx, mobile)
+		}
 		return user.User{}, err
 	}
+	_ = s.registrationGuard.MarkRegistered(ctx, mobile)
 	return registered, nil
+}
+
+func (s UserCommandService) CreateRegisterCaptcha(ctx context.Context, cmd RegisterCaptchaCommand) (RegisterCaptcha, error) {
+	mobile := strings.TrimSpace(cmd.Mobile)
+	if mobile == "" {
+		return RegisterCaptcha{}, therrors.New(therrors.CodeInvalidArgument, "mobile is required")
+	}
+	return s.registrationGuard.IssueCaptcha(ctx, RegisterCaptchaCommand{
+		Mobile:   mobile,
+		ClientIP: strings.TrimSpace(cmd.ClientIP),
+	})
 }
 
 func (s UserCommandService) Login(ctx context.Context, cmd LoginCommand) (LoginResult, error) {
