@@ -30,6 +30,7 @@ security:
   trusted_proxy_cidrs:
     - 127.0.0.1/32
     - 172.16.0.0/12
+    - 10.0.0.0/8
 registration_protection:
   enabled: true
   captcha_ttl: 2m

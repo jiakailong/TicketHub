@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tickethub-redis
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickethub-redis
+  template:
+    metadata:
+      labels:
+        app: tickethub-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.2            # 和 compose 一致：redis:7.2
+          command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+          ports:
+            - containerPort: 6379   # redis 端口
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]   # compose 的 healthcheck 原样搬
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: redis-config
+              mountPath: /usr/local/etc/redis/redis.conf
+              subPath: redis.conf      # ③ 
+              readOnly: true
+            - name: redis-data
+              mountPath: /data            # compose 里 volume 挂到哪？
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-config                   # 第一步创建的 ConfigMap 名字
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-data             # 和下面 PVC 的 metadata.name 对应
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickethub-redis                             # 关键：和 compose 服务名一致
+  namespace: tickethub
+spec:
+  selector:
+    app: tickethub-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data                             # 和 Deployment 里 claimName 对应
+  namespace: tickethub
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,141 @@
+# ============ Prometheus ============
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tickethub-prometheus
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickethub-prometheus
+  template:
+    metadata:
+      labels:
+        app: tickethub-prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.53.0            # prom/prometheus:v2.53.0
+          ports:
+            - containerPort: 9090  # prometheus 端口
+          readinessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config            # prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickethub-prometheus                     # 关键：Grafana datasource 里写的就是这个名字
+  namespace: tickethub
+spec:
+  selector:
+    app: tickethub-prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+
+# ============ Grafana ============
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: tickethub
+# data 由 kubectl create 生成，这里只是占位（apply 时不会覆盖已存在的）——不用填
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tickethub-grafana
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickethub-grafana
+  template:
+    metadata:
+      labels:
+        app: tickethub-grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.1.0
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: tickethub-secrets
+                  key: TICKETHUB_GRAFANA_ADMIN_USER           # .env 里的 Grafana 用户名键名
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tickethub-secrets
+                  key: TICKETHUB_GRAFANA_ADMIN_PASSWORD           # .env 里的 Grafana 密码键名
+          ports:
+            - containerPort: 3000     # grafana 端口
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/grafana        # 数据（PVC）
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: dashboards-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-data           # 下面 PVC 的名字
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboards-provider
+          configMap:
+            name: grafana-dashboards-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickethub-grafana
+  namespace: tickethub
+spec:
+  selector:
+    app: tickethub-grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data                        # 和 claimName 对应
+  namespace: tickethub
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi

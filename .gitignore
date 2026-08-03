@@ -39,3 +39,7 @@ coverage.*
 .DS_Store
 Thumbs.db
 
+# Local personal files
+/简历/
+/.ua/
+

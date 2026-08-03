@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tickethub-apisix
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickethub-apisix
+  template:
+    metadata:
+      labels:
+        app: tickethub-apisix
+    spec:
+      containers:
+        - name: apisix
+          image: apache/apisix:3.9.0-debian
+          env:
+            - name: APISIX_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tickethub-secrets
+                  key: APISIX_ADMIN_KEY
+          ports:
+            - containerPort: 9080
+            - containerPort: 9443
+            - containerPort: 9180
+            - containerPort: 9091
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/apisix/conf/config.yaml
+              subPath: config.yaml
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: apisix-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickethub-apisix
+  namespace: tickethub
+spec:
+  selector:
+    app: tickethub-apisix
+  ports:
+    - name: http
+      port: 9080
+      targetPort: 9080
+    - name: admin
+      port: 9180
+      targetPort: 9180
+    - name: metrics
+      port: 9091
+      targetPort: 9091

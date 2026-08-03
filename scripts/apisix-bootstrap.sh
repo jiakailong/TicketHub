@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APISIX_ADMIN="${APISIX_ADMIN:-http://127.0.0.1:9180}"
+APISIX_ADMIN="${APISIX_ADMIN:-http://127.0.0.1:${TICKETHUB_APISIX_ADMIN_PORT:-9180}}"
 APISIX_ADMIN_KEY="${APISIX_ADMIN_KEY:?APISIX_ADMIN_KEY must be set}"
 DEFAULT_BFF_UPSTREAM="host.docker.internal:8080"
 if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then

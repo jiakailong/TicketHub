@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tickethub-etcd
+  namespace: tickethub
+spec:
+  serviceName: tickethub-etcd
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickethub-etcd
+  template:
+    metadata:
+      labels:
+        app: tickethub-etcd
+    spec:
+      containers:
+        - name: etcd
+          image: quay.io/coreos/etcd:v3.5.21                    # quay.io/coreos/etcd:v3.5.21
+          command:                        # quay.io/coreos/etcd 无 ENTRYPOINT，必须完整写：可执行文件 + 参数
+            - /usr/local/bin/etcd
+            - --name=tickethub-etcd
+            - --data-dir=/etcd-data
+            - --advertise-client-urls=http://tickethub-etcd:2379
+            - --listen-client-urls=http://0.0.0.0:2379
+            - --initial-advertise-peer-urls=http://tickethub-etcd:2380
+            - --listen-peer-urls=http://0.0.0.0:2380
+            - --initial-cluster=tickethub-etcd=http://tickethub-etcd:2380
+            - --initial-cluster-state=new
+          ports:
+            - containerPort: 2379        # client 端口
+          readinessProbe:              # compose healthcheck 原样搬
+            exec:
+              command: ["etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: etcd-data
+              mountPath: /etcd-data            # compose 挂的 /etcd-data
+      volumes: []                      # 不需要手动 volumes——StatefulSet 用下面这个自动生成
+  volumeClaimTemplates:
+    - metadata:
+        name: etcd-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickethub-etcd                             # 关键：APISIX config.yaml 里写的就是这个
+  namespace: tickethub
+spec:
+  selector:
+    app: tickethub-etcd
+  ports:
+    - name: client
+      port: 2379                          # APISIX 连的 etcd 端口
+      targetPort: 2379
+    - name: peer
+      port: 2380
+      targetPort: 2380

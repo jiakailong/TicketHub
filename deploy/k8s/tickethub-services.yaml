@@ -1,3 +1,93 @@
+# TicketHub 9 个 Go 服务全量部署（k8s 集群内联中间件）
+# 服务间调用/中间件地址通过环境变量注入集群内 Service DNS，config.yaml 默认值仅用于本地开发
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-bff
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway-bff
+  template:
+    metadata:
+      labels:
+        app: gateway-bff
+    spec:
+      containers:
+        - name: gateway-bff
+          image: tickethub/gateway-bff:local
+          envFrom:
+            - secretRef:
+                name: tickethub-secrets
+          env:
+            - name: TICKETHUB_ADAPTER_MODE
+              value: "infra"
+            - name: TICKETHUB_REDIS_ADDR
+              value: "tickethub-redis:6379"
+            - name: TICKETHUB_KAFKA_BROKERS
+              value: "tickethub-kafka:9092"
+            - name: TICKETHUB_MYSQL_HOST
+              value: "tickethub-mysql:3306"
+            - name: TICKETHUB_UPSTREAM_USER_SERVICE
+              value: "http://user-service:8001"
+            - name: TICKETHUB_UPSTREAM_PROGRAM_SERVICE
+              value: "http://program-service:8002"
+            - name: TICKETHUB_UPSTREAM_ORDER_SERVICE
+              value: "http://order-service:8003"
+            - name: TICKETHUB_UPSTREAM_PAY_SERVICE
+              value: "http://pay-service:8004"
+            - name: TICKETHUB_UPSTREAM_BASE_DATA_SERVICE
+              value: "http://base-data-service:8005"
+            - name: TICKETHUB_UPSTREAM_CUSTOMIZE_SERVICE
+              value: "http://customize-service:8006"
+            - name: TICKETHUB_UPSTREAM_ADMIN_SERVICE
+              value: "http://admin-service:8007"
+            - name: TICKETHUB_UPSTREAM_MIGRATE_SERVICE
+              value: "http://migrate-service:8008"
+            - name: TICKETHUB_GRPC_UPSTREAM_USER_SERVICE
+              value: "user-service:9001"
+            - name: TICKETHUB_GRPC_UPSTREAM_PROGRAM_SERVICE
+              value: "program-service:9002"
+            - name: TICKETHUB_GRPC_UPSTREAM_ORDER_SERVICE
+              value: "order-service:9003"
+            - name: TICKETHUB_GRPC_UPSTREAM_PAY_SERVICE
+              value: "pay-service:9004"
+            - name: TICKETHUB_GRPC_UPSTREAM_BASE_DATA_SERVICE
+              value: "base-data-service:9005"
+            - name: TICKETHUB_GRPC_UPSTREAM_CUSTOMIZE_SERVICE
+              value: "customize-service:9006"
+            - name: TICKETHUB_GRPC_UPSTREAM_ADMIN_SERVICE
+              value: "admin-service:9007"
+            - name: TICKETHUB_GRPC_UPSTREAM_MIGRATE_SERVICE
+              value: "migrate-service:9008"
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-bff
+  namespace: tickethub
+spec:
+  selector:
+    app: gateway-bff
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,16 +106,29 @@ spec:
       containers:
         - name: user-service
           image: tickethub/user-service:local
+          envFrom:
+            - secretRef:
+                name: tickethub-secrets
+          env:
+            - name: TICKETHUB_ADAPTER_MODE
+              value: "infra"
+            - name: TICKETHUB_REDIS_ADDR
+              value: "tickethub-redis:6379"
+            - name: TICKETHUB_KAFKA_BROKERS
+              value: "tickethub-kafka:9092"
+            - name: TICKETHUB_MYSQL_HOST
+              value: "tickethub-mysql:3306"
           ports:
-            - containerPort: 8001
+            - name: http
+              containerPort: 8001
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8001
+              port: http
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8001
+              port: http
 ---
 apiVersion: v1
 kind: Service
@@ -39,6 +142,9 @@ spec:
     - name: http
       port: 8001
       targetPort: 8001
+    - name: grpc
+      port: 9001
+      targetPort: 9001
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -46,7 +152,7 @@ metadata:
   name: program-service
   namespace: tickethub
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
       app: program-service
@@ -58,16 +164,33 @@ spec:
       containers:
         - name: program-service
           image: tickethub/program-service:local
+          envFrom:
+            - secretRef:
+                name: tickethub-secrets
+          env:
+            - name: TICKETHUB_ADAPTER_MODE
+              value: "infra"
+            - name: TICKETHUB_REDIS_ADDR
+              value: "tickethub-redis:6379"
+            - name: TICKETHUB_KAFKA_BROKERS
+              value: "tickethub-kafka:9092"
+            - name: TICKETHUB_MYSQL_HOST
+              value: "tickethub-mysql:3306"
+            - name: TICKETHUB_ES_ADDRESSES
+              value: "http://tickethub-elasticsearch:9200"
+            - name: TICKETHUB_GRPC_UPSTREAM_USER_SERVICE
+              value: "user-service:9001"
           ports:
-            - containerPort: 8002
+            - name: http
+              containerPort: 8002
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8002
+              port: http
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8002
+              port: http
 ---
 apiVersion: v1
 kind: Service
@@ -81,6 +204,9 @@ spec:
     - name: http
       port: 8002
       targetPort: 8002
+    - name: grpc
+      port: 9002
+      targetPort: 9002
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -88,7 +214,7 @@ metadata:
   name: order-service
   namespace: tickethub
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
       app: order-service
@@ -100,16 +226,33 @@ spec:
       containers:
         - name: order-service
           image: tickethub/order-service:local
+          envFrom:
+            - secretRef:
+                name: tickethub-secrets
+          env:
+            - name: TICKETHUB_ADAPTER_MODE
+              value: "infra"
+            - name: TICKETHUB_REDIS_ADDR
+              value: "tickethub-redis:6379"
+            - name: TICKETHUB_KAFKA_BROKERS
+              value: "tickethub-kafka:9092"
+            - name: TICKETHUB_MYSQL_HOST
+              value: "tickethub-mysql:3306"
+            - name: TICKETHUB_GRPC_UPSTREAM_PROGRAM_SERVICE
+              value: "program-service:9002"
+            - name: TICKETHUB_GRPC_UPSTREAM_MIGRATE_SERVICE
+              value: "migrate-service:9008"
           ports:
-            - containerPort: 8003
+            - name: http
+              containerPort: 8003
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8003
+              port: http
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8003
+              port: http
 ---
 apiVersion: v1
 kind: Service
@@ -123,6 +266,9 @@ spec:
     - name: http
       port: 8003
       targetPort: 8003
+    - name: grpc
+      port: 9003
+      targetPort: 9003
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -130,7 +276,7 @@ metadata:
   name: pay-service
   namespace: tickethub
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: pay-service
@@ -142,16 +288,31 @@ spec:
       containers:
         - name: pay-service
           image: tickethub/pay-service:local
+          envFrom:
+            - secretRef:
+                name: tickethub-secrets
+          env:
+            - name: TICKETHUB_ADAPTER_MODE
+              value: "infra"
+            - name: TICKETHUB_REDIS_ADDR
+              value: "tickethub-redis:6379"
+            - name: TICKETHUB_KAFKA_BROKERS
+              value: "tickethub-kafka:9092"
+            - name: TICKETHUB_MYSQL_HOST
+              value: "tickethub-mysql:3306"
+            - name: TICKETHUB_GRPC_UPSTREAM_ORDER_SERVICE
+              value: "order-service:9003"
           ports:
-            - containerPort: 8004
+            - name: http
+              containerPort: 8004
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8004
+              port: http
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8004
+              port: http
 ---
 apiVersion: v1
 kind: Service
@@ -165,4 +326,240 @@ spec:
     - name: http
       port: 8004
       targetPort: 8004
-
+    - name: grpc
+      port: 9004
+      targetPort: 9004
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: base-data-service
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: base-data-service
+  template:
+    metadata:
+      labels:
+        app: base-data-service
+    spec:
+      containers:
+        - name: base-data-service
+          image: tickethub/base-data-service:local
+          envFrom:
+            - secretRef:
+                name: tickethub-secrets
+          env:
+            - name: TICKETHUB_ADAPTER_MODE
+              value: "infra"
+            - name: TICKETHUB_REDIS_ADDR
+              value: "tickethub-redis:6379"
+            - name: TICKETHUB_KAFKA_BROKERS
+              value: "tickethub-kafka:9092"
+            - name: TICKETHUB_MYSQL_HOST
+              value: "tickethub-mysql:3306"
+          ports:
+            - name: http
+              containerPort: 8005
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: base-data-service
+  namespace: tickethub
+spec:
+  selector:
+    app: base-data-service
+  ports:
+    - name: http
+      port: 8005
+      targetPort: 8005
+    - name: grpc
+      port: 9005
+      targetPort: 9005
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customize-service
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: customize-service
+  template:
+    metadata:
+      labels:
+        app: customize-service
+    spec:
+      containers:
+        - name: customize-service
+          image: tickethub/customize-service:local
+          envFrom:
+            - secretRef:
+                name: tickethub-secrets
+          env:
+            - name: TICKETHUB_ADAPTER_MODE
+              value: "infra"
+            - name: TICKETHUB_REDIS_ADDR
+              value: "tickethub-redis:6379"
+            - name: TICKETHUB_KAFKA_BROKERS
+              value: "tickethub-kafka:9092"
+            - name: TICKETHUB_MYSQL_HOST
+              value: "tickethub-mysql:3306"
+          ports:
+            - name: http
+              containerPort: 8006
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: customize-service
+  namespace: tickethub
+spec:
+  selector:
+    app: customize-service
+  ports:
+    - name: http
+      port: 8006
+      targetPort: 8006
+    - name: grpc
+      port: 9006
+      targetPort: 9006
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-service
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-service
+  template:
+    metadata:
+      labels:
+        app: admin-service
+    spec:
+      containers:
+        - name: admin-service
+          image: tickethub/admin-service:local
+          envFrom:
+            - secretRef:
+                name: tickethub-secrets
+          env:
+            - name: TICKETHUB_ADAPTER_MODE
+              value: "infra"
+            - name: TICKETHUB_REDIS_ADDR
+              value: "tickethub-redis:6379"
+            - name: TICKETHUB_KAFKA_BROKERS
+              value: "tickethub-kafka:9092"
+            - name: TICKETHUB_MYSQL_HOST
+              value: "tickethub-mysql:3306"
+            - name: TICKETHUB_GRPC_UPSTREAM_ORDER_SERVICE
+              value: "order-service:9003"
+          ports:
+            - name: http
+              containerPort: 8007
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-service
+  namespace: tickethub
+spec:
+  selector:
+    app: admin-service
+  ports:
+    - name: http
+      port: 8007
+      targetPort: 8007
+    - name: grpc
+      port: 9007
+      targetPort: 9007
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: migrate-service
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: migrate-service
+  template:
+    metadata:
+      labels:
+        app: migrate-service
+    spec:
+      containers:
+        - name: migrate-service
+          image: tickethub/migrate-service:local
+          envFrom:
+            - secretRef:
+                name: tickethub-secrets
+          env:
+            - name: TICKETHUB_ADAPTER_MODE
+              value: "infra"
+            - name: TICKETHUB_REDIS_ADDR
+              value: "tickethub-redis:6379"
+            - name: TICKETHUB_KAFKA_BROKERS
+              value: "tickethub-kafka:9092"
+            - name: TICKETHUB_MYSQL_HOST
+              value: "tickethub-mysql:3306"
+          ports:
+            - name: http
+              containerPort: 8008
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: migrate-service
+  namespace: tickethub
+spec:
+  selector:
+    app: migrate-service
+  ports:
+    - name: http
+      port: 8008
+      targetPort: 8008
+    - name: grpc
+      port: 9008
+      targetPort: 9008

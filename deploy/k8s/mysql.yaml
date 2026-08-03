@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tickethub-mysql
+  namespace: tickethub
+spec:
+  serviceName: tickethub-mysql      # ① 指向下面的 headless Service（给 Pod 稳定 DNS）
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickethub-mysql
+  template:
+    metadata:
+      labels:
+        app: tickethub-mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.4                  # 和 compose 一致
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tickethub-secrets
+                  key: TICKETHUB_MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              value: tickethub
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: tickethub-secrets
+                  key: TICKETHUB_MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tickethub-secrets
+                  key: TICKETHUB_MYSQL_PASSWORD
+            - name: TZ
+              value: Asia/Shanghai
+          args:                       
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_0900_ai_ci
+            - --default-time-zone=+08:00  
+          ports:
+            - containerPort: 3306      # mysql 端口
+          readinessProbe:            # compose 的 healthcheck 原样搬（注意 $ 变量要 sh -c 包一层）
+            exec:
+              command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD"]
+            initialDelaySeconds: 20   # 数据库初始化 SQL 要跑一会儿，给足时间
+            periodSeconds: 10
+          volumeMounts:
+            - name: mysql-data                # 和 volumeClaimTemplates 的名字对应
+              mountPath: /var/lib/mysql            # mysql 数据目录（compose 挂的 /var/lib/mysql）
+            - name: mysql-init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: mysql-init
+          configMap:
+            name: mysql-init                   # 第一步创建的 ConfigMap
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data                        # 同一个名字
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickethub-mysql                             # 和 compose 服务名一致（应用连它的关键）
+  namespace: tickethub
+spec:
+  clusterIP: None                      # headless：StatefulSet 用它给 Pod 稳定 DNS
+  selector:
+    app: tickethub-mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306

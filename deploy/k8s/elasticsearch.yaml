@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tickethub-elasticsearch
+  namespace: tickethub
+spec:
+  serviceName: tickethub-elasticsearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickethub-elasticsearch
+  template:
+    metadata:
+      labels:
+        app: tickethub-elasticsearch
+    spec:
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: -Xms512m -Xmx512m
+          ports:
+            - containerPort: 9200
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9200
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: es-data
+              mountPath: /usr/share/elasticsearch/data
+  volumeClaimTemplates:
+    - metadata:
+        name: es-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickethub-elasticsearch
+  namespace: tickethub
+spec:
+  selector:
+    app: tickethub-elasticsearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200

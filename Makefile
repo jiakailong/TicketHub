@@ -6,7 +6,7 @@ include .env
 export
 endif
 
-.PHONY: test test-integration fmt vet build image proto docker-config docker-up docker-down bootstrap-infra web-install web-dev web-build web-test privacy-expand privacy-migrate privacy-contract
+.PHONY: test test-integration fmt vet build image proto docker-config docker-up docker-down bootstrap-infra web-install web-dev web-build web-test privacy-expand privacy-migrate privacy-contract k8s-start k8s-stop k8s-delete
 
 test:
 	go test ./...
@@ -45,6 +45,24 @@ docker-up:
 
 docker-down:
 	docker compose -p $(PROJECT) down
+
+# 本地 k8s 学习环境：minikube（docker 驱动，k8s v1.31.3）
+# 说明：组件镜像走阿里云加速，二进制走 dl.k8s.io（本机网络 Docker Hub/阿里云 OSS 受限时可用）
+K8S_VERSION := v1.31.3
+K8S_MEMORY := 5120
+
+k8s-start:
+	minikube start --driver=docker --cpus=4 --memory=$(K8S_MEMORY) \
+		--kubernetes-version=$(K8S_VERSION) \
+		--image-repository=registry.cn-hangzhou.aliyuncs.com/google_containers \
+		--binary-mirror=https://dl.k8s.io \
+		--preload=false
+
+k8s-stop:
+	minikube stop
+
+k8s-delete:
+	minikube delete
 
 bootstrap-infra:
 	scripts/bootstrap-local-dependencies.sh

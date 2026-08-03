@@ -309,6 +309,28 @@ func (c *Config) ApplyDefaults() {
 	if c.GRPCUpstreams == nil {
 		c.GRPCUpstreams = map[string]string{}
 	}
+	// 集群部署时用环境变量注入中间件/服务间地址（默认值保留 config.yaml 的本地地址）
+	if value := strings.TrimSpace(os.Getenv("TICKETHUB_REDIS_ADDR")); value != "" {
+		c.Redis.Addr = value
+	}
+	if value := strings.TrimSpace(os.Getenv("TICKETHUB_KAFKA_BROKERS")); value != "" {
+		c.Kafka.Brokers = strings.Split(value, ",")
+	}
+	if value := strings.TrimSpace(os.Getenv("TICKETHUB_ES_ADDRESSES")); value != "" {
+		c.Elasticsearch.Addresses = strings.Split(value, ",")
+	}
+	for name := range c.Upstreams {
+		key := "TICKETHUB_UPSTREAM_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			c.Upstreams[name] = value
+		}
+	}
+	for name := range c.GRPCUpstreams {
+		key := "TICKETHUB_GRPC_UPSTREAM_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			c.GRPCUpstreams[name] = value
+		}
+	}
 	if c.Observability.LogLevel == "" {
 		c.Observability.LogLevel = "info"
 	}
