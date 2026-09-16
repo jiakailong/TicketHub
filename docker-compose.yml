@@ -38,7 +38,7 @@ services:
       - ./deploy/docker/apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
     ports:
       - "127.0.0.1:9080:9080"
-      - "127.0.0.1:9443:9443"
+      - "127.0.0.1:9444:9443"
       - "127.0.0.1:${TICKETHUB_APISIX_ADMIN_PORT:-9180}:9180"
     expose:
       - "9091"
