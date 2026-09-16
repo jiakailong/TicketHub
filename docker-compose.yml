@@ -119,7 +119,7 @@ services:
       retries: 20
 
   tickethub-elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    image: elasticsearch:8.14.3
     container_name: tickethub-elasticsearch
     environment:
       discovery.type: single-node
