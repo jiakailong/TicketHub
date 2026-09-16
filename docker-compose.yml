@@ -1,5 +1,28 @@
 name: tickethub
 
+# 9 个 Go 服务的公共片段。YAML 锚点（&）定义、别名（*）引用、<< 合并。
+# 注意：environment 的优先级高于 env_file，所以下面的地址能覆盖 .env 里的 127.0.0.1。
+x-app-env: &app-env
+  TICKETHUB_ADAPTER_MODE: infra
+  TICKETHUB_MYSQL_HOST: tickethub-mysql:3306
+  TICKETHUB_REDIS_ADDR: tickethub-redis:6379
+  TICKETHUB_KAFKA_BROKERS: tickethub-kafka:9092
+
+x-app-depends: &app-depends
+  tickethub-mysql:
+    condition: service_healthy
+  tickethub-redis:
+    condition: service_healthy
+  tickethub-kafka:
+    condition: service_healthy
+
+x-app-common: &app-common
+  env_file:
+    - .env
+  restart: unless-stopped
+  networks:
+    - tickethub-net
+
 services:
   tickethub-etcd:
     image: quay.io/coreos/etcd:v3.5.21
@@ -143,7 +166,7 @@ services:
     volumes:
       - ./deploy/docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "127.0.0.1:9090:9090"
+      - "127.0.0.1:${TICKETHUB_PROMETHEUS_PORT:-19090}:9090"
     extra_hosts:
       - "host.docker.internal:${TICKETHUB_HOST_IP:-host-gateway}"
     networks:
@@ -165,6 +188,161 @@ services:
       - tickethub-prometheus
     networks:
       - tickethub-net
+
+  gateway-bff:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: gateway-bff
+    image: tickethub/gateway-bff:local
+    container_name: gateway-bff
+    environment:
+      <<: *app-env
+      TICKETHUB_UPSTREAM_USER_SERVICE: http://user-service:8001
+      TICKETHUB_UPSTREAM_PROGRAM_SERVICE: http://program-service:8002
+      TICKETHUB_UPSTREAM_ORDER_SERVICE: http://order-service:8003
+      TICKETHUB_UPSTREAM_PAY_SERVICE: http://pay-service:8004
+      TICKETHUB_UPSTREAM_BASE_DATA_SERVICE: http://base-data-service:8005
+      TICKETHUB_UPSTREAM_CUSTOMIZE_SERVICE: http://customize-service:8006
+      TICKETHUB_UPSTREAM_ADMIN_SERVICE: http://admin-service:8007
+      TICKETHUB_UPSTREAM_MIGRATE_SERVICE: http://migrate-service:8008
+      TICKETHUB_GRPC_UPSTREAM_USER_SERVICE: user-service:9001
+      TICKETHUB_GRPC_UPSTREAM_PROGRAM_SERVICE: program-service:9002
+      TICKETHUB_GRPC_UPSTREAM_ORDER_SERVICE: order-service:9003
+      TICKETHUB_GRPC_UPSTREAM_PAY_SERVICE: pay-service:9004
+      TICKETHUB_GRPC_UPSTREAM_BASE_DATA_SERVICE: base-data-service:9005
+      TICKETHUB_GRPC_UPSTREAM_CUSTOMIZE_SERVICE: customize-service:9006
+      TICKETHUB_GRPC_UPSTREAM_ADMIN_SERVICE: admin-service:9007
+      TICKETHUB_GRPC_UPSTREAM_MIGRATE_SERVICE: migrate-service:9008
+    depends_on:
+      <<: *app-depends
+      user-service:
+        condition: service_started
+      program-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      pay-service:
+        condition: service_started
+      base-data-service:
+        condition: service_started
+      customize-service:
+        condition: service_started
+      admin-service:
+        condition: service_started
+      migrate-service:
+        condition: service_started
+
+  user-service:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: user-service
+    image: tickethub/user-service:local
+    container_name: user-service
+    environment: *app-env
+    depends_on: *app-depends
+
+  program-service:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: program-service
+    image: tickethub/program-service:local
+    container_name: program-service
+    environment:
+      <<: *app-env
+      TICKETHUB_ES_ADDRESSES: http://tickethub-elasticsearch:9200
+      TICKETHUB_GRPC_UPSTREAM_USER_SERVICE: user-service:9001
+    depends_on:
+      <<: *app-depends
+      tickethub-elasticsearch:
+        condition: service_healthy
+
+  order-service:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: order-service
+    image: tickethub/order-service:local
+    container_name: order-service
+    environment:
+      <<: *app-env
+      TICKETHUB_GRPC_UPSTREAM_PROGRAM_SERVICE: program-service:9002
+      TICKETHUB_GRPC_UPSTREAM_MIGRATE_SERVICE: migrate-service:9008
+    depends_on: *app-depends
+
+  pay-service:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: pay-service
+    image: tickethub/pay-service:local
+    container_name: pay-service
+    environment:
+      <<: *app-env
+      TICKETHUB_GRPC_UPSTREAM_ORDER_SERVICE: order-service:9003
+    depends_on: *app-depends
+
+  base-data-service:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: base-data-service
+    image: tickethub/base-data-service:local
+    container_name: base-data-service
+    environment: *app-env
+    depends_on: *app-depends
+
+  customize-service:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: customize-service
+    image: tickethub/customize-service:local
+    container_name: customize-service
+    environment: *app-env
+    depends_on: *app-depends
+
+  admin-service:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: admin-service
+    image: tickethub/admin-service:local
+    container_name: admin-service
+    environment:
+      <<: *app-env
+      TICKETHUB_GRPC_UPSTREAM_ORDER_SERVICE: order-service:9003
+    depends_on: *app-depends
+
+  migrate-service:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        SERVICE: migrate-service
+    image: tickethub/migrate-service:local
+    container_name: migrate-service
+    environment: *app-env
+    depends_on: *app-depends
 
 networks:
   tickethub-net:

@@ -21,7 +21,7 @@ routes:
     upstream:
       type: roundrobin
       nodes:
-        "host.docker.internal:8080": 1
+        "gateway-bff:8080": 1
   - id: tickethub-create-order
     uri: /api/orders
     methods: [POST]
@@ -46,7 +46,7 @@ routes:
     upstream:
       type: roundrobin
       nodes:
-        "host.docker.internal:8080": 1
+        "gateway-bff:8080": 1
   - id: tickethub-bff-health
     uri: /healthz
     plugins:
@@ -68,5 +68,5 @@ routes:
     upstream:
       type: roundrobin
       nodes:
-        "host.docker.internal:8080": 1
+        "gateway-bff:8080": 1
 #END

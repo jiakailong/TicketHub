@@ -1,0 +1,55 @@
+
+# ── 版本控制与编辑器 ────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+.idea
+.vscode
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# ── 构建产物与运行时垃圾 ────────────────────────────────
+bin/
+*.test
+*.out
+coverage
+coverage.*
+tmp/
+.run/
+*.log
+*.pid
+
+# ── Go workspace：镜像内是单模块，不需要 ─────────────────
+go.work
+go.work.sum
+
+# ── 前端：后端镜像用不到，node_modules 体积巨大 ──────────
+web/
+
+# ── 文档与部署清单（运行时不需要）────────────────────────
+docs/
+deploy/k8s/
+deploy/helm/
+README.md
+Makefile
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# ── 测试与工具脚本：不被任何服务二进制 import ────────────
+tests/
+scripts/

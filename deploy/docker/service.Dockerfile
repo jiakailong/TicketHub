@@ -1,6 +1,10 @@
 FROM golang:1.25-bookworm AS build
 
 WORKDIR /src
+
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=${GOPROXY}
+
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
@@ -13,7 +17,7 @@ FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 ARG SERVICE
 COPY --from=build /out/server /app/server
-COPY --from=build /src/app/${SERVICE}/configs/config.yaml /app/config.yaml
+COPY --chmod=0644 --from=build /src/app/${SERVICE}/configs/config.yaml /app/config.yaml
 
 USER nonroot:nonroot
 ENTRYPOINT ["/app/server", "-conf", "/app/config.yaml"]
