@@ -1,0 +1,44 @@
+# 前端 SPA：nginx 托管静态产物，/api 同源代理到集群内 APISIX（web/nginx.conf）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tickethub-web
+  namespace: tickethub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickethub-web
+  template:
+    metadata:
+      labels:
+        app: tickethub-web
+    spec:
+      containers:
+        - name: web
+          image: tickethub/web:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickethub-web
+  namespace: tickethub
+spec:
+  selector:
+    app: tickethub-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
